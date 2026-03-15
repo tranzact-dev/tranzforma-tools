@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tranzForma APD analyzer</title>
+<link rel="stylesheet" href="../shared/common.css">
+<link rel="stylesheet" href="analyzer.css">
+</head>
+<body>
+
+<header>
+  <img src="../shared/logo.png" alt="tranzForma">
+  <h1><span>tranzForma</span> APD analyzer</h1>
+  <span class="ver">v1.0</span>
+</header>
+
+<div class="tab-bar">
+  <button class="tab-btn active" id="tab-btn-list"    onclick="switchTab('list')">📋 フォーム一覧</button>
+  <button class="tab-btn"        id="tab-btn-compare" onclick="switchTab('compare')">🔀 差分比較・移行</button>
+</div>
+
+<!-- ══════════════ Tab: フォーム一覧 ══════════════ -->
+<div class="content" id="pane-list">
+
+  <div class="drop-zone" id="dropSingle">
+    <div class="icon">📦</div>
+    APDファイルをドラッグ＆ドロップ、またはクリックして選択
+    <input type="file" id="fileSingle" accept=".apd,.xml,.txt">
+  </div>
+
+  <div id="listResult" style="display:none">
+    <div class="action-row">
+      <span id="listSummary" style="font:400 11px var(--mono); color:var(--text3)"></span>
+      <button class="btn btn-fix" onclick="copyListTSV()">📋 TSVをコピー</button>
+    </div>
+    <div class="table-wrap">
+      <table id="listTable">
+        <thead>
+          <tr>
+            <th>フォームリスト</th>
+            <th>リスト名</th>
+            <th>フォームラベル</th>
+            <th>名称 JA</th>
+            <th>名称 EN</th>
+            <th>IMP</th>
+            <th>EXP</th>
+            <th>REFLECT</th>
+            <th>パラメータ</th>
+            <th>トリガー</th>
+          </tr>
+        </thead>
+        <tbody id="listTbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="listEmpty" class="empty-state">
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>
+    </svg>
+    APDファイルを読み込んでください
+  </div>
+
+</div>
+
+<!-- ══════════════ Tab: 差分比較・移行 ══════════════ -->
+<div class="content" id="pane-compare" style="display:none">
+
+  <div class="drop-pair">
+    <div class="apd-drop-wrap">
+      <div class="apd-drop-label">APD — A（移行元）</div>
+      <div class="apd-drop" id="dropA">
+        <div class="icon">📦</div>
+        <span>クリックまたはドロップ</span>
+        <span class="drop-filename" id="fileAName"></span>
+        <input type="file" id="fileA" accept=".apd,.xml,.txt">
+      </div>
+    </div>
+    <div class="apd-drop-wrap">
+      <div class="apd-drop-label">APD — B（移行先）</div>
+      <div class="apd-drop" id="dropB">
+        <div class="icon">📦</div>
+        <span>クリックまたはドロップ</span>
+        <span class="drop-filename" id="fileBName"></span>
+        <input type="file" id="fileB" accept=".apd,.xml,.txt">
+      </div>
+    </div>
+  </div>
+
+  <div class="action-row">
+    <button class="btn btn-primary" id="compareBtn" onclick="runCompare()" disabled>▶ 比較</button>
+  </div>
+
+  <div id="compareResult" style="display:none">
+    <div class="chip-row" id="filterChips"></div>
+    <div class="table-wrap">
+      <table id="compareTable">
+        <thead>
+          <tr>
+            <th>フォームラベル</th>
+            <th>ステータス</th>
+            <th>フォームリスト</th>
+            <th>名称 JA</th>
+            <th>名称 EN</th>
+            <th>IMP</th>
+            <th>EXP</th>
+            <th>REFLECT</th>
+          </tr>
+        </thead>
+        <tbody id="compareTbody"></tbody>
+      </table>
+    </div>
+
+    <div class="migrate-section" id="migrateSection">
+      <div class="migrate-heading">移行</div>
+      <div class="dir-btns">
+        <button class="dir-btn active" id="dirAtoB" onclick="setDir('AtoB')">A → B</button>
+        <button class="dir-btn"        id="dirBtoA" onclick="setDir('BtoA')">B → A</button>
+      </div>
+      <div class="migrate-info" id="migrateInfo"></div>
+      <div class="action-row">
+        <button class="btn btn-fix" onclick="downloadMigrate()">⬇ ZIPをダウンロード</button>
+        <span style="font:400 10px var(--mono); color:var(--text3)">※ インターネット接続が必要です</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="analyzer.js"></script>
+</body>
+</html>
