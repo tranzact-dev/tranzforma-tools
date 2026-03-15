@@ -3,7 +3,7 @@ body { overflow: hidden; height: 100vh; }
 
 .three-col {
   flex: 1; display: grid;
-  grid-template-columns: 340px 1fr 300px;
+  grid-template-columns: 380px 1fr 340px;
   min-height: 0; overflow: hidden;
 }
 .three-col .pane { overflow: hidden; }
@@ -12,7 +12,7 @@ body { overflow: hidden; height: 100vh; }
 .header-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 
 .change-count {
-  display: none; font: 600 11px var(--mono); padding: 3px 10px;
+  display: none; font: 600 12px var(--mono); padding: 3px 10px;
   background: var(--warn-dim); color: var(--warn);
   border: 1px solid rgba(228,168,66,0.3); border-radius: 99px;
 }
@@ -24,14 +24,14 @@ body { overflow: hidden; height: 100vh; }
   background: var(--surface2); display: flex; align-items: center;
   gap: 16px; flex-wrap: wrap;
 }
-.global-strip-label { font: 600 9px var(--mono); color: var(--text3); letter-spacing: 0.08em; }
+.global-strip-label { font: 600 11px var(--mono); color: var(--text3); letter-spacing: 0.08em; }
 .global-strip label {
-  font: 500 10px var(--mono); color: var(--text2);
+  font: 500 12px var(--mono); color: var(--text2);
   display: flex; align-items: center; gap: 6px;
 }
 .global-strip select {
   background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
-  color: var(--text); font: 500 10px var(--mono); padding: 3px 6px; outline: none;
+  color: var(--text); font: 500 12px var(--mono); padding: 3px 6px; outline: none;
 }
 .global-strip select:focus { border-color: var(--accent); }
 
@@ -51,14 +51,14 @@ body { overflow: hidden; height: 100vh; }
 
 .tree-section { margin-bottom: 4px; }
 .tree-section-title {
-  padding: 6px 14px 3px; font: 600 9px var(--mono);
+  padding: 6px 14px 3px; font: 600 11px var(--mono);
   color: var(--text3); letter-spacing: 0.08em; text-transform: uppercase;
 }
 
 .tree-node {
   padding: 6px 14px; display: flex; align-items: center;
   justify-content: space-between; cursor: pointer;
-  transition: background 0.12s; gap: 6px; min-height: 34px;
+  transition: background 0.12s; gap: 6px; min-height: 36px;
 }
 .tree-node:hover { background: var(--surface2); }
 .tree-node.selected { background: var(--accent-dim); }
@@ -69,26 +69,26 @@ body { overflow: hidden; height: 100vh; }
 
 .tn-main { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; overflow: hidden; }
 .tn-icon { font-size: 13px; flex-shrink: 0; }
-.tn-dim { font: 500 11px var(--mono); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tn-lbl { font: 400 10px var(--mono); color: var(--text3); white-space: nowrap; }
+.tn-dim { font: 500 12px var(--mono); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tn-lbl { font: 400 11px var(--mono); color: var(--text3); white-space: nowrap; }
 
 .tn-pills { display: flex; gap: 4px; flex-shrink: 0; }
 .tn-pill {
-  font: 600 9px var(--mono); padding: 2px 6px; border-radius: 4px; border: none;
+  font: 600 10px var(--mono); padding: 2px 7px; border-radius: 4px; border: none;
   cursor: pointer; transition: all 0.12s; white-space: nowrap;
   background: var(--surface2); color: var(--text3); border: 1px solid var(--border);
 }
 .tn-pill:hover { border-color: var(--border-hover); color: var(--text2); }
 .tn-pill.active { background: var(--ok-dim); color: var(--ok); border-color: rgba(78,202,139,0.3); }
 .tn-pill.disabled-dep { opacity: 0.3; pointer-events: none; }
-.pill-suppress { width: 84px; }
-.pill-item { width: 72px; }
+.pill-suppress { width: 88px; }
+.pill-item { width: 76px; }
 
 .tree-indent { padding-left: 18px; border-left: 1px solid var(--border); margin-left: 20px; }
 
 /* ─── Node badges ─── */
 .node-badge {
-  font: 700 8px var(--mono); padding: 1px 5px; border-radius: 3px;
+  font: 700 9px var(--mono); padding: 1px 5px; border-radius: 3px;
   letter-spacing: 0.04em; flex-shrink: 0;
 }
 .badge-form { background: var(--accent-dim); color: var(--accent); }
@@ -99,7 +99,7 @@ body { overflow: hidden; height: 100vh; }
 .edit-empty {
   flex: 1; display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  color: var(--text3); font: 400 11px var(--mono);
+  color: var(--text3); font: 400 12px var(--mono);
   gap: 10px; opacity: 0.5; text-align: center; padding: 24px;
 }
 #editPanel { overflow-y: auto; flex: 1; }
@@ -109,19 +109,19 @@ body { overflow: hidden; height: 100vh; }
 
 .edit-section { border-bottom: 1px solid var(--border); }
 .edit-section-header {
-  padding: 8px 14px; font: 600 11px var(--sans); color: var(--text2);
+  padding: 8px 14px; font: 600 12px var(--sans); color: var(--text2);
   background: var(--surface); display: flex; align-items: center; gap: 6px;
 }
 .edit-section-body { padding: 10px 14px; display: flex; flex-direction: column; gap: 10px; }
 
 /* ─── Form fields ─── */
 .field { display: flex; flex-direction: column; gap: 4px; }
-.field label { font: 500 9px var(--mono); color: var(--text3); letter-spacing: 0.04em; }
+.field label { font: 500 11px var(--mono); color: var(--text3); letter-spacing: 0.04em; }
 .field input[type="text"],
 .field input[type="number"],
 .field select {
   background: var(--surface2); border: 1px solid var(--border); border-radius: 5px;
-  color: var(--text); font: 400 11px var(--mono); padding: 5px 8px; outline: none;
+  color: var(--text); font: 400 12px var(--mono); padding: 5px 8px; outline: none;
   transition: border-color 0.15s;
 }
 .field input:focus, .field select:focus { border-color: var(--accent); }
@@ -132,8 +132,8 @@ body { overflow: hidden; height: 100vh; }
 
 /* ─── Toggle switch ─── */
 .toggle-wrap { display: flex; align-items: center; justify-content: space-between; }
-.toggle-label { font: 500 11px var(--sans); color: var(--text); }
-.toggle-sub { font: 400 9px var(--mono); color: var(--text3); margin-top: 1px; }
+.toggle-label { font: 500 12px var(--sans); color: var(--text); }
+.toggle-sub { font: 400 10px var(--mono); color: var(--text3); margin-top: 1px; }
 .toggle { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
 .toggle input { opacity: 0; width: 0; height: 0; }
 .slider {
@@ -152,7 +152,7 @@ body { overflow: hidden; height: 100vh; }
 /* ─── Edit panel select ─── */
 .edit-section-body select {
   background: var(--surface2); border: 1px solid var(--border); border-radius: 5px;
-  color: var(--text); font: 400 11px var(--mono); padding: 5px 8px; outline: none;
+  color: var(--text); font: 400 12px var(--mono); padding: 5px 8px; outline: none;
   width: 100%;
 }
 .edit-section-body select:focus { border-color: var(--accent); }
@@ -161,7 +161,7 @@ body { overflow: hidden; height: 100vh; }
 .toast {
   position: fixed; bottom: 20px; right: 20px;
   padding: 10px 18px; border-radius: 8px;
-  font: 600 12px var(--mono); display: none; z-index: 9999;
+  font: 600 13px var(--mono); display: none; z-index: 9999;
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
   animation: slideUp 0.2s ease;
 }

@@ -1,24 +1,12 @@
 // ═══════════════════════════════════════════════════════════════════
 // State
 // ═══════════════════════════════════════════════════════════════════
-let activeTab       = 'list';
-let singleForms     = null;     // forms[] from single APD
-let apdA            = null;     // { fileName, forms[] }
-let apdB            = null;     // { fileName, forms[] }
-let compareResults  = null;     // result[]
-let statusFilter    = 'ALL';    // 'ALL' | 'SAME' | 'DIFFERENT' | 'A_ONLY' | 'B_ONLY'
-let migrateDir      = 'AtoB';
-
-// ═══════════════════════════════════════════════════════════════════
-// Tab control
-// ═══════════════════════════════════════════════════════════════════
-function switchTab(tab) {
-  activeTab = tab;
-  document.getElementById('pane-list').style.display    = tab === 'list'    ? '' : 'none';
-  document.getElementById('pane-compare').style.display = tab === 'compare' ? '' : 'none';
-  document.getElementById('tab-btn-list').classList.toggle('active',    tab === 'list');
-  document.getElementById('tab-btn-compare').classList.toggle('active', tab === 'compare');
-}
+let apdA           = null;   // { fileName, forms[] }
+let apdB           = null;   // { fileName, forms[] }
+let compareResults = null;   // result[]
+let statusFilter   = 'ALL';
+let migrateDir     = 'AtoB';
+let activeListSide = null;   // 'A' | 'B'
 
 // ═══════════════════════════════════════════════════════════════════
 // Drop zone setup
@@ -81,8 +69,8 @@ function parseAPD(xmlText) {
       const flElems = formList.querySelector(':scope > elements');
       if (!flElems) continue;
 
-      const nameEl   = [...flElems.children].find(el => el.getAttribute('type') === 'NAME');
-      const flName   = parseName(nameEl?.querySelector('content')?.textContent || '');
+      const nameEl    = [...flElems.children].find(el => el.getAttribute('type') === 'NAME');
+      const flName    = parseName(nameEl?.querySelector('content')?.textContent || '');
       const flNameStr = flName.en || flName.ja;
 
       const formsContainer = [...flElems.children].find(el => el.getAttribute('type') === 'FORMS');
@@ -149,43 +137,62 @@ function parseAPD(xmlText) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Tab 1: フォーム一覧
+// APD load handlers
 // ═══════════════════════════════════════════════════════════════════
-setupDrop('dropSingle', 'fileSingle', (text, fileName) => {
+function onApdLoaded(side, text, fileName) {
   try {
-    singleForms = parseAPD(text);
-    renderListTable(singleForms, fileName);
-    showToast(`${singleForms.length}件のフォームを読み込みました`);
+    const forms = parseAPD(text);
+    const data  = { fileName, forms };
+    if (side === 'A') apdA = data; else apdB = data;
+
+    const dropEl = document.getElementById(`drop${side}`);
+    dropEl.classList.add('loaded');
+    dropEl.querySelector('.drop-filename').textContent = `${fileName} (${forms.length}件)`;
+
+    document.getElementById(`listBtn${side}`).disabled = false;
+    document.getElementById('compareBtn').disabled = !(apdA && apdB);
+
+    // 比較済み結果があれば非表示にリセット
+    if (compareResults) {
+      compareResults = null;
+      document.getElementById('compareResult').style.display = 'none';
+      document.getElementById('resultArea').style.display = 'none';
+    }
+
+    showToast(`[${side}] ${forms.length}件のフォームを読み込みました`);
   } catch (e) {
     showToast(e.message, 'error');
   }
-});
+}
 
-function renderListTable(forms, fileName) {
-  document.getElementById('listEmpty').style.display  = 'none';
+setupDrop('dropA', 'fileA', (t, f) => onApdLoaded('A', t, f));
+setupDrop('dropB', 'fileB', (t, f) => onApdLoaded('B', t, f));
+
+// ═══════════════════════════════════════════════════════════════════
+// フォーム一覧
+// ═══════════════════════════════════════════════════════════════════
+function renderListResult(side) {
+  const apd = side === 'A' ? apdA : apdB;
+  if (!apd) return;
+  activeListSide = side;
+
+  document.getElementById('resultArea').style.display = '';
   document.getElementById('listResult').style.display = '';
+  document.getElementById('compareResult').style.display = 'none';
 
-  const dropEl = document.getElementById('dropSingle');
-  dropEl.classList.add('loaded');
-  dropEl.innerHTML = `<div class="icon">✅</div><span class="drop-filename">${esc(fileName)}</span><span style="font:400 10px var(--mono); color:var(--ok)">${forms.length}件</span><input type="file" id="fileSingle" accept=".apd,.xml,.txt">`;
-  setupDrop('dropSingle', 'fileSingle', (t, f) => {
-    try { singleForms = parseAPD(t); renderListTable(singleForms, f); showToast(`${singleForms.length}件読み込み`); }
-    catch (e) { showToast(e.message, 'error'); }
-  });
-
+  const forms = apd.forms;
   document.getElementById('listSummary').textContent =
-    `${forms.length}件のフォーム`;
+    `[APD-${side}] ${apd.fileName} — ${forms.length}件のフォーム`;
 
-  const tbody = document.getElementById('listTbody');
-  tbody.innerHTML = forms.map(f => `
+  document.getElementById('listTbody').innerHTML = forms.map(f => `
     <tr>
       <td class="label-cell">${esc(f.flLabel)}</td>
       <td>${esc(f.flName)}</td>
       <td class="label-cell">${esc(f.formLabel)}</td>
       <td>${esc(f.formNameJa)}</td>
       <td>${esc(f.formNameEn)}</td>
-      <td class="${f.import  ? 'on' : ''}">${esc(f.import)}</td>
-      <td class="${f.export  ? 'on' : ''}">${esc(f.export)}</td>
+      <td class="${f.import      ? 'on' : ''}">${esc(f.import)}</td>
+      <td class="${f.export      ? 'on' : ''}">${esc(f.export)}</td>
       <td class="${f.reflectCalc ? 'on' : ''}">${esc(f.reflectCalc)}</td>
       <td class="params">${esc(f.parameters)}</td>
       <td class="params">${esc(f.triggers)}</td>
@@ -193,9 +200,10 @@ function renderListTable(forms, fileName) {
 }
 
 function copyListTSV() {
-  if (!singleForms) return;
+  const apd = activeListSide === 'A' ? apdA : apdB;
+  if (!apd) return;
   const header = 'FORM_LIST_LABEL\tFORM_LIST_NAME\tFORM_LABEL\tFORM_NAME_JA\tFORM_NAME_EN\tREFLECT_CALC\tIMPORT\tEXPORT\tPARAMETERS\tTRIGGERS';
-  const rows = singleForms.map(f =>
+  const rows = apd.forms.map(f =>
     [f.flLabel, f.flName, f.formLabel, f.formNameJa, f.formNameEn,
      f.reflectCalc, f.import, f.export, f.parameters, f.triggers].join('\t')
   );
@@ -211,31 +219,8 @@ function copyListTSV() {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// Tab 2: 差分比較
+// 差分比較
 // ═══════════════════════════════════════════════════════════════════
-function onApdLoaded(side, text, fileName) {
-  try {
-    const forms = parseAPD(text);
-    const data  = { fileName, forms };
-    if (side === 'A') apdA = data; else apdB = data;
-
-    const dropEl   = document.getElementById(`drop${side}`);
-    const nameEl   = document.getElementById(`file${side}Name`);
-    dropEl.classList.add('loaded');
-    nameEl.textContent = `${fileName} (${forms.length}件)`;
-
-    document.getElementById('compareBtn').disabled = !(apdA && apdB);
-    compareResults = null;
-    document.getElementById('compareResult').style.display = 'none';
-    showToast(`[${side}] ${forms.length}件のフォームを読み込みました`);
-  } catch (e) {
-    showToast(e.message, 'error');
-  }
-}
-
-setupDrop('dropA', 'fileA', (t, f) => onApdLoaded('A', t, f));
-setupDrop('dropB', 'fileB', (t, f) => onApdLoaded('B', t, f));
-
 function runCompare() {
   if (!apdA || !apdB) return;
 
@@ -248,16 +233,18 @@ function runCompare() {
     const inA = mapA.has(label);
     const inB = mapB.has(label);
     let status, formA = mapA.get(label) || null, formB = mapB.get(label) || null;
-    if (inA && !inB)       status = 'A_ONLY';
-    else if (!inA && inB)  status = 'B_ONLY';
-    else                   status = formA.xml === formB.xml ? 'SAME' : 'DIFFERENT';
+    if (inA && !inB)      status = 'A_ONLY';
+    else if (!inA && inB) status = 'B_ONLY';
+    else                  status = formA.xml === formB.xml ? 'SAME' : 'DIFFERENT';
     compareResults.push({ label, status, formA, formB });
   }
 
   statusFilter = 'ALL';
+  document.getElementById('resultArea').style.display = '';
+  document.getElementById('listResult').style.display = 'none';
+  document.getElementById('compareResult').style.display = '';
   renderCompareResults();
   updateMigrateInfo();
-  document.getElementById('compareResult').style.display = '';
   showToast(`比較完了: ${compareResults.length}件`);
 }
 
@@ -267,7 +254,6 @@ function renderCompareResults() {
   const counts = { SAME: 0, DIFFERENT: 0, A_ONLY: 0, B_ONLY: 0 };
   compareResults.forEach(r => counts[r.status]++);
 
-  // Filter chips
   const chipDefs = [
     { key: 'ALL',       label: `全件 ${compareResults.length}`, cls: 'total' },
     { key: 'DIFFERENT', label: `差分あり ${counts.DIFFERENT}`,  cls: 'diff' },
@@ -279,7 +265,6 @@ function renderCompareResults() {
     <span class="chip ${d.cls}${statusFilter === d.key ? ' active' : ''}"
           onclick="setStatusFilter('${d.key}')">${d.label}</span>`).join('');
 
-  // Table
   const filtered = statusFilter === 'ALL'
     ? compareResults
     : compareResults.filter(r => r.status === statusFilter);
@@ -291,16 +276,17 @@ function renderCompareResults() {
     B_ONLY:    `<span class="st st-bonly">B ONLY</span>`,
   };
 
+  const rowClass = { DIFFERENT: 'row-diff', A_ONLY: 'row-aonly', B_ONLY: 'row-bonly', SAME: '' };
   document.getElementById('compareTbody').innerHTML = filtered.map(r => {
     const f = r.formA || r.formB;
-    return `<tr>
+    return `<tr class="${rowClass[r.status]}">
       <td class="label-cell">${esc(r.label)}</td>
       <td>${stMap[r.status]}</td>
       <td>${esc(f?.flLabel || '')}</td>
       <td>${esc(f?.formNameJa || '')}</td>
       <td>${esc(f?.formNameEn || '')}</td>
-      <td class="${f?.import  ? 'on' : ''}">${esc(f?.import  || '')}</td>
-      <td class="${f?.export  ? 'on' : ''}">${esc(f?.export  || '')}</td>
+      <td class="${f?.import      ? 'on' : ''}">${esc(f?.import      || '')}</td>
+      <td class="${f?.export      ? 'on' : ''}">${esc(f?.export      || '')}</td>
       <td class="${f?.reflectCalc ? 'on' : ''}">${esc(f?.reflectCalc || '')}</td>
     </tr>`;
   }).join('');
@@ -334,10 +320,10 @@ function getMigrateForms() {
 }
 
 function updateMigrateInfo() {
-  const forms = getMigrateForms();
-  const dir   = migrateDir === 'AtoB' ? 'A → B' : 'B → A';
-  const diffCount  = forms.filter(f => f.status === 'DIFFERENT').length;
-  const onlyCount  = forms.filter(f => f.status !== 'DIFFERENT').length;
+  const forms     = getMigrateForms();
+  const dir       = migrateDir === 'AtoB' ? 'A → B' : 'B → A';
+  const diffCount = forms.filter(f => f.status === 'DIFFERENT').length;
+  const onlyCount = forms.filter(f => f.status !== 'DIFFERENT').length;
   document.getElementById('migrateInfo').innerHTML =
     `方向: <strong>${dir}</strong> &nbsp;|&nbsp; ` +
     `対象: <strong>${forms.length}件</strong>` +
@@ -376,7 +362,7 @@ async function downloadMigrate() {
 // ═══════════════════════════════════════════════════════════════════
 function showToast(msg, type) {
   const t = document.getElementById('toast');
-  t.textContent = msg;
+  t.textContent      = msg;
   t.style.background = type === 'error' ? 'var(--error)' : 'var(--ok)';
   t.style.color      = type === 'error' ? '#fff'         : '#0c0e14';
   t.classList.add('show');
