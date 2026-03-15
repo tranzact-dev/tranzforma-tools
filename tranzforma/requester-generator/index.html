@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Requester Wizard – tranzForma Tools</title>
+<link rel="stylesheet" href="../shared/common.css">
+<style>
+
+.container {
+  max-width: 780px; margin: 32px auto; padding: 0 20px 80px;
+}
+
+/* ── Step indicator ── */
+.steps {
+  display: flex; margin-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+}
+.step {
+  flex: 1; text-align: center; padding: 10px 4px;
+  font: 600 10px var(--mono); color: var(--text3);
+  border-bottom: 2px solid transparent; cursor: default;
+  letter-spacing: 0.05em; text-transform: uppercase;
+}
+.step.active { border-color: var(--accent); color: var(--accent); }
+.step.done   { border-color: var(--ok);     color: var(--ok); }
+
+/* ── Cards ── */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 24px; margin-bottom: 16px;
+}
+.card h2 {
+  font: 600 11px var(--mono); color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.1em;
+  margin-bottom: 20px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Form fields ── */
+.field { margin-bottom: 16px; }
+.field:last-child { margin-bottom: 0; }
+.field > label {
+  display: block; font: 600 11px var(--mono); color: var(--text2);
+  margin-bottom: 6px; letter-spacing: 0.03em;
+}
+.field .hint { font: 400 11px var(--sans); color: var(--text3); margin-bottom: 6px; }
+.field input[type=text], .field select {
+  width: 100%; padding: 8px 12px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 5px; color: var(--text); font: 400 13px var(--mono);
+  transition: border-color 0.15s;
+}
+.field input[type=text]:focus, .field select:focus {
+  outline: none; border-color: var(--accent);
+}
+
+/* ── Radio / checkbox groups ── */
+.radio-group, .check-group { display: flex; flex-direction: column; gap: 6px; }
+.radio-group label, .check-group label {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 14px; border: 1px solid var(--border); border-radius: 6px;
+  cursor: pointer; font: 400 13px var(--sans); color: var(--text2);
+  transition: all 0.15s; background: var(--surface2);
+}
+.radio-group label:hover, .check-group label:hover {
+  border-color: var(--accent); color: var(--text); background: var(--accent-dim);
+}
+.radio-group label:has(input:disabled) {
+  opacity: 0.35; cursor: not-allowed; pointer-events: none;
+}
+.radio-group input, .check-group input {
+  margin-top: 2px; flex-shrink: 0; accent-color: var(--accent);
+}
+.label-title { font-weight: 600; color: var(--text); }
+.label-desc  { font-size: 0.8em; color: var(--text3); margin-top: 1px; }
+
+/* ── Sub-field ── */
+.sub-field {
+  margin-top: 10px; padding: 14px;
+  background: var(--bg); border-radius: 6px; border: 1px solid var(--border);
+}
+.sub-field .field { margin-bottom: 12px; }
+.sub-field .field:last-child { margin-bottom: 0; }
+
+/* ── Navigation buttons ── */
+.btn-row { display: flex; gap: 10px; margin-top: 20px; }
+.btn-next { background: var(--accent); color: #fff; }
+.btn-next:hover:not(:disabled) { filter: brightness(1.15); transform: translateY(-1px); }
+.btn-next:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-back { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+.btn-back:hover { color: var(--text); border-color: var(--accent); }
+.btn-dl {
+  background: var(--ok-dim); color: var(--ok);
+  border: 1px solid rgba(78,202,139,0.3);
+  font-size: 14px; padding: 12px 36px;
+}
+.btn-dl:hover { background: rgba(78,202,139,0.22); border-color: var(--ok); transform: translateY(-1px); }
+
+/* ── APD drop zone ── */
+.apd-drop { margin: 0; }
+
+/* ── APD result summary ── */
+.apd-summary {
+  margin-top: 16px; padding: 14px;
+  background: var(--ok-dim); border: 1px solid rgba(78,202,139,0.25);
+  border-radius: 6px;
+}
+.apd-filename {
+  font: 600 12px var(--mono); color: var(--ok); margin-bottom: 10px;
+}
+.apd-grid { display: flex; flex-direction: column; gap: 4px; }
+.apd-row { display: flex; gap: 12px; font: 400 12px var(--mono); }
+.apd-key { color: var(--text3); min-width: 180px; }
+.apd-val { color: var(--text2); word-break: break-all; }
+
+/* ── APD error ── */
+.apd-error {
+  margin-top: 12px; padding: 10px 14px;
+  background: var(--error-dim); border: 1px solid rgba(239,100,97,0.3);
+  border-radius: 6px; font: 400 12px var(--mono); color: var(--error);
+}
+
+/* ── POV rows ── */
+.pov-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 10px 14px; border: 1px solid var(--border);
+  border-radius: 6px; background: var(--surface2); margin-bottom: 6px;
+}
+.pov-row:last-child { margin-bottom: 0; }
+.pov-dim-label {
+  font: 600 12px var(--mono); color: var(--accent);
+  min-width: 100px; padding-top: 2px;
+}
+.pov-modes { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; flex: 1; }
+.pov-mode-label {
+  display: flex; align-items: center; gap: 6px;
+  font: 400 13px var(--sans); color: var(--text2); cursor: pointer;
+}
+.pov-mode-label input[type=radio] { accent-color: var(--accent); }
+.pov-val-wrap { display: flex; align-items: center; }
+.pov-val {
+  padding: 5px 10px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text); font: 400 12px var(--mono);
+  min-width: 120px;
+}
+.pov-val:focus { outline: none; border-color: var(--accent); }
+
+/* ── Summary ── */
+.summary-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.summary-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.summary-table td:first-child { font: 600 11px var(--mono); color: var(--text3); width: 45%; }
+.summary-table td:last-child  { color: var(--text2); }
+
+/* ── Download area ── */
+.download-area { text-align: center; padding: 20px 0; }
+.download-area p { font: 400 12px var(--sans); color: var(--text3); margin-top: 12px; line-height: 1.7; }
+
+.hidden { display: none !important; }
+
+</style>
+</head>
+<body>
+
+<header>
+  <img src="../shared/logo.png" alt="tranzForma">
+  <h1><span>Requester</span> Wizard</h1>
+  <span class="ver">v0.1-dev</span>
+</header>
+
+<div class="container">
+
+  <!-- Step indicator -->
+  <div class="steps">
+    <div class="step active" id="step-ind-1">1. APD</div>
+    <div class="step"        id="step-ind-2">2. 接続・実行</div>
+    <div class="step"        id="step-ind-3">3. リクエスト</div>
+    <div class="step"        id="step-ind-4">4. ループ</div>
+    <div class="step"        id="step-ind-5">5. オプション</div>
+    <div class="step"        id="step-ind-6">6. 生成</div>
+  </div>
+
+  <!-- ══════════ STEP 1: APD ══════════ -->
+  <div id="step-1">
+    <div class="card">
+      <h2>APD ファイル読み込み</h2>
+      <div class="drop-zone apd-drop" id="apd-drop-zone">
+        <input type="file" id="apd-file-input" accept=".apd">
+        <div class="icon">📂</div>
+        <div>APD ファイルをドロップ、またはクリックして選択</div>
+      </div>
+      <div id="apd-result" class="hidden"></div>
+      <div id="apd-error" class="apd-error hidden"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-next" id="step1-next" onclick="goStep(2)" disabled>次へ →</button>
+    </div>
+  </div>
+
+  <!-- ══════════ STEP 2: 接続・実行 ══════════ -->
+  <div id="step-2" class="hidden">
+    <div class="card">
+      <h2>接続情報</h2>
+      <div class="field">
+        <label>接続情報の取得方法</label>
+        <div class="radio-group">
+          <label>
+            <input type="radio" name="connType" value="envbat" checked>
+            <div>
+              <div class="label-title">env.bat 参照</div>
+              <div class="label-desc">実行フォルダの親にある env.bat から読み込みます（推奨）</div>
+            </div>
+          </label>
+          <label>
+            <input type="radio" name="connType" value="hardcode" disabled>
+            <div>
+              <div class="label-title">ハードコード</div>
+              <div class="label-desc">bat ファイル内に直接記述します（テスト・検証用）</div>
+            </div>
+          </label>
+        </div>
+      </div>
+      <div class="field">
+        <label>接続先サーバー</label>
+        <div class="radio-group">
+          <label>
+            <input type="radio" name="serverType" value="LOCAL" checked>
+            <div>
+              <div class="label-title">LOCAL</div>
+              <div class="label-desc">http://localhost:50000/fusionplace</div>
+            </div>
+          </label>
+          <label>
+            <input type="radio" name="serverType" value="SDX">
+            <div>
+              <div class="label-title">SDX</div>
+              <div class="label-desc">http://ec2-3-114-169-70.ap-northeast-1.compute.amazonaws.com:50000/fusionplace</div>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>実行方式</h2>
+      <div class="field">
+        <div class="radio-group">
+          <label>
+            <input type="radio" name="execMode" value="interactive" checked>
+            <div>
+              <div class="label-title">インタラクティブ（手動実行）</div>
+              <div class="label-desc">実行時にキーボードで月範囲を入力します。pause あり。</div>
+            </div>
+          </label>
+          <label>
+            <input type="radio" name="execMode" value="batch-arg" disabled>
+            <div>
+              <div class="label-title">バッチ実行 - 引数渡し</div>
+              <div class="label-desc">JP1 等のスケジューラから %1 %2 で月範囲を受け取ります。pause なし。</div>
+            </div>
+          </label>
+          <label>
+            <input type="radio" name="execMode" value="batch-hard" disabled>
+            <div>
+              <div class="label-title">バッチ実行 - ハードコード</div>
+              <div class="label-desc">月範囲を bat 内に固定値で記述します。pause なし。</div>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-back" onclick="goStep(1)">← 戻る</button>
+      <button class="btn btn-next" onclick="goStep(3)">次へ →</button>
+    </div>
+  </div>
+
+  <!-- ══════════ STEP 3: リクエスト ══════════ -->
+  <div id="step-3" class="hidden">
+    <div class="card">
+      <h2>リクエストタイプ</h2>
+      <div class="field">
+        <div class="radio-group">
+          <label><input type="radio" name="reqType" value="EXPORT_VALUES" disabled>
+            <div><div class="label-title">EXPORT_VALUES</div><div class="label-desc">フォームを用いたデータのエクスポート</div></div>
+          </label>
+          <label><input type="radio" name="reqType" value="IMPORT_VALUES" checked>
+            <div><div class="label-title">IMPORT_VALUES</div><div class="label-desc">フォームを用いたデータのインポート</div></div>
+          </label>
+          <label><input type="radio" name="reqType" value="CALCULATE_BY_FORM" disabled>
+            <div><div class="label-title">CALCULATE_BY_FORM</div><div class="label-desc">フォームを用いた計算処理の実行</div></div>
+          </label>
+          <label><input type="radio" name="reqType" value="UPDATE_DIMENSION" disabled>
+            <div><div class="label-title">UPDATE_DIMENSION</div><div class="label-desc">ディメンションメンバのインポート</div></div>
+          </label>
+          <label><input type="radio" name="reqType" value="EXPORT_DIMENSION" disabled>
+            <div><div class="label-title">EXPORT_DIMENSION</div><div class="label-desc">ディメンションメンバのエクスポート</div></div>
+          </label>
+          <label><input type="radio" name="reqType" value="IMPORT_TRANSLATION_TABLE" disabled>
+            <div><div class="label-title">IMPORT_TRANSLATION_TABLE</div><div class="label-desc">変換テーブルのインポート</div></div>
+          </label>
+          <label><input type="radio" name="reqType" value="RUN_SCRIPT" disabled>
+            <div><div class="label-title">RUN_SCRIPT</div><div class="label-desc">スクリプトの実行</div></div>
+          </label>
+          <label><input type="radio" name="reqType" value="BACKUP_APPLICATION" disabled>
+            <div><div class="label-title">BACKUP_APPLICATION</div><div class="label-desc">アプリケーションのバックアップ</div></div>
+          </label>
+        </div>
+      </div>
+
+      <!-- EXPORT_VALUES / IMPORT_VALUES / CALCULATE_BY_FORM -->
+      <div id="param-form-group" class="sub-field">
+        <div class="field">
+          <label>FORM</label>
+          <select id="p-form"></select>
+        </div>
+        <div class="field">
+          <label>PARTICIPANT</label>
+          <div class="hint" id="participant-hint"></div>
+          <input type="text" id="p-participant" value="ADMIN">
+        </div>
+      </div>
+
+      <!-- IMPORT_VALUES: POV selection (dynamic from FORM selection) -->
+      <div id="param-import-pov" class="sub-field hidden">
+        <div class="field">
+          <label>POV パラメータ（request.xml に渡す変数）</label>
+          <div class="hint">フォームのパラメータ次元ごとに「実行時指定」か「固定値」を選択してください。</div>
+          <div id="pov-list">
+            <span style="font:400 11px var(--mono);color:var(--text3)">フォームを選択してください</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- UPDATE_DIMENSION / EXPORT_DIMENSION -->
+      <div id="param-dim-group" class="sub-field hidden">
+        <div class="field">
+          <label>DIMENSION</label>
+          <select id="p-dimension"></select>
+        </div>
+        <div id="param-role-field" class="field hidden">
+          <label>ROLE</label>
+          <div class="radio-group">
+            <label><input type="radio" name="dimRole" value="DESIGNER" checked><span>DESIGNER（設計者モード）</span></label>
+            <label><input type="radio" name="dimRole" value="ADMINISTRATOR"><span>ADMINISTRATOR（管理者モード）</span></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- RUN_SCRIPT -->
+      <div id="param-script-group" class="sub-field hidden">
+        <div class="field">
+          <label>SCRIPT</label>
+          <select id="p-script"></select>
+        </div>
+      </div>
+
+      <!-- IMPORT_TRANSLATION_TABLE -->
+      <div id="param-tt-group" class="sub-field hidden">
+        <div class="field">
+          <label>TRANSLATION TABLE</label>
+          <select id="p-tt"></select>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-back" onclick="goStep(2)">← 戻る</button>
+      <button class="btn btn-next" onclick="goStep(4)">次へ →</button>
+    </div>
+  </div>
+
+  <!-- ══════════ STEP 4: ループ ══════════ -->
+  <div id="step-4" class="hidden">
+    <div class="card">
+      <h2>ループ設定</h2>
+      <div class="field">
+        <label>月ループ</label>
+        <div class="radio-group">
+          <label><input type="radio" name="monthLoop" value="yes" disabled>
+            <div><div class="label-title">あり</div><div class="label-desc">FY / PERIOD を月ごとに計算してリクエストに渡す</div></div>
+          </label>
+          <label><input type="radio" name="monthLoop" value="no" checked>
+            <div><div class="label-title">なし</div><div class="label-desc">月ループなし（1回実行）</div></div>
+          </label>
+        </div>
+      </div>
+
+      <div id="sub-loop-fields">
+        <div class="field" style="margin-top:14px;">
+          <label>追加ループ軸</label>
+          <div class="hint">月ループの内側でさらに繰り返す軸を選択（複数可）</div>
+          <div class="check-group">
+            <label><input type="checkbox" id="loop-scenario"><span>シナリオ（SCENARIO）</span></label>
+            <label><input type="checkbox" id="loop-sbu"><span>SBU</span></label>
+          </div>
+        </div>
+        <div id="scenario-list-field" class="sub-field hidden">
+          <div class="field">
+            <label>シナリオリスト（スペース区切り）</label>
+            <div class="hint">APD のシナリオを読み込み済みです。必要に応じて編集してください。</div>
+            <input type="text" id="scenario-list" placeholder="例: ACT PLAN RES BUD FCT">
+          </div>
+        </div>
+        <div id="sbu-list-field" class="sub-field hidden">
+          <div class="field">
+            <label>SBU リスト（スペース区切り）</label>
+            <input type="text" id="sbu-list" placeholder="例: ZDV01 ZDV02 ZDV03">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-back" onclick="goStep(3)">← 戻る</button>
+      <button class="btn btn-next" onclick="goStep(5)">次へ →</button>
+    </div>
+  </div>
+
+  <!-- ══════════ STEP 5: オプション ══════════ -->
+  <div id="step-5" class="hidden">
+    <div class="card">
+      <h2>エラーハンドリング</h2>
+      <div class="field">
+        <div class="radio-group">
+          <label><input type="radio" name="errLevel" value="full" disabled>
+            <div>
+              <div class="label-title">フル</div>
+              <div class="label-desc">RC=1/2/4/8 判定、サマリーログ生成、終了後に WARNING 一覧表示</div>
+            </div>
+          </label>
+          <label><input type="radio" name="errLevel" value="minimal" checked>
+            <div>
+              <div class="label-title">ミニマル</div>
+              <div class="label-desc">ERRORLEVEL 確認のみ</div>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-back" onclick="goStep(4)">← 戻る</button>
+      <button class="btn btn-next" onclick="goStep(6)">次へ →</button>
+    </div>
+  </div>
+
+  <!-- ══════════ STEP 6: 生成 ══════════ -->
+  <div id="step-6" class="hidden">
+    <div class="card">
+      <h2>設定確認</h2>
+      <table class="summary-table" id="summary-table"></table>
+    </div>
+    <div class="card">
+      <h2>ZIP 生成・ダウンロード</h2>
+      <div class="download-area">
+        <button class="btn btn-dl" onclick="generateZip()">ZIP を生成してダウンロード</button>
+        <p>Requester.zip をダウンロードします。<br>
+           解凍後、fusion_place-requester-*.jar を Requester/ に配置してください。</p>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-back" onclick="goStep(5)">← 戻る</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- JSZip (CDN) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="apd-parser.js"></script>
+<script src="generator.js"></script>
+<script src="ui.js"></script>
+
+</body>
+</html>
