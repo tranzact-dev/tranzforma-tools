@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tranzForma Tools</title>
+<link rel="stylesheet" href="shared/common.css">
+<style>
+body { justify-content: flex-start; }
+.tools-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px; padding: 32px 24px; max-width: 900px; margin: 0 auto; width: 100%;
+}
+.tool-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 24px; display: flex; flex-direction: column; gap: 12px;
+  text-decoration: none; color: var(--text); transition: all 0.2s;
+}
+.tool-card:hover { border-color: var(--accent); background: var(--surface2); transform: translateY(-2px); }
+.tool-card .card-icon { font-size: 28px; }
+.tool-card .card-title { font: 700 15px var(--sans); }
+.tool-card .card-title span { color: var(--accent); }
+.tool-card .card-ver { font: 500 10px var(--mono); color: var(--text3); }
+.tool-card .card-desc { font: 400 12px var(--sans); color: var(--text2); line-height: 1.7; }
+.page-title {
+  padding: 28px 24px 0; max-width: 900px; margin: 0 auto; width: 100%;
+  font: 400 13px var(--mono); color: var(--text3);
+}
+</style>
+</head>
+<body>
+
+<header>
+  <img src="shared/logo.png" alt="tranzForma">
+  <h1><span>tranzForma</span> Tools</h1>
+</header>
+
+<div class="page-title">fusion_place 開発支援ツール群</div>
+
+<div class="tools-grid">
+
+  <a class="tool-card" href="xml-review/">
+    <div class="card-icon">🔍</div>
+    <div>
+      <div class="card-title"><span>tranzForma</span> XML review tool</div>
+      <div class="card-ver">v2.0</div>
+    </div>
+    <div class="card-desc">fusion_place フォーム定義XMLのチェックツール。命名規約・設定ミスを自動検出。COM/REF/IMP/EXP/PIPパターン対応。</div>
+  </a>
+
+  <a class="tool-card" href="xml-clone/">
+    <div class="card-icon">🔄</div>
+    <div>
+      <div class="card-title"><span>tranzForma</span> XML clone tool</div>
+      <div class="card-ver">v1.0</div>
+    </div>
+    <div class="card-desc">列仕様・行仕様・ループブロックを複製するツール。id の重複を自動回避しながら、関連する cell-spec も含めて複製。</div>
+  </a>
+
+</div>
+
+</body>
+</html>
