@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tranzForma XML review tool</title>
+<link rel="stylesheet" href="../shared/common.css">
+</head>
+<body>
+
+<header>
+  <img src="../shared/logo.png" alt="tranzForma">
+  <h1><span>tranzForma</span> XML review tool</h1>
+  <span class="ver">v2.0</span>
+</header>
+
+<div class="toolbar">
+  <span style="font: 600 10px var(--mono); color: var(--text3); letter-spacing: 0.08em;">CHECK PATTERN:</span>
+  <label><input type="radio" name="pattern" value="common" checked> 共通チェックのみ</label>
+  <label><input type="radio" name="pattern" value="ref"> 参照用フォーム</label>
+  <label><input type="radio" name="pattern" value="import"> インポート</label>
+  <label><input type="radio" name="pattern" value="export"> エクスポート</label>
+  <label><input type="radio" name="pattern" value="pipeline"> パイプライン(OUT)</label>
+</div>
+
+<main>
+  <!-- Input Pane -->
+  <div class="pane">
+    <div class="pane-header">Input — XML</div>
+    <div class="input-area" style="flex:1;display:flex;flex-direction:column;min-height:0;">
+      <div class="drop-zone" id="dropZone">
+        <div class="icon">📄</div>
+        XMLファイルをドラッグ＆ドロップ、またはクリックして選択
+        <input type="file" id="fileInput" accept=".xml,.txt">
+      </div>
+      <textarea id="xmlInput" placeholder="またはXMLをここに貼り付けてください"></textarea>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="runCheck()">▶ チェック実行</button>
+        <button class="btn btn-secondary" id="copyXmlBtn" onclick="copyXml()">📋 XMLをコピー</button>
+        <button class="btn btn-secondary" onclick="clearAll()">クリア</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Results Pane -->
+  <div class="pane">
+    <div class="pane-header">Results</div>
+    <div class="results-area" id="results">
+      <div class="result-empty">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+        </svg>
+        XMLを入力してチェック実行
+      </div>
+    </div>
+    <div class="export-bar" id="exportBar" style="display:none">
+      <button class="btn btn-fix" id="fixBtn" onclick="autoFix()" disabled>🔧 自動修正してコピー</button>
+      <button class="btn btn-fix" id="fixRunBtn" onclick="autoFixAndRecheck()" disabled>🔧 自動修正して再チェック</button>
+      <button class="btn btn-secondary" id="exportTextBtn" onclick="exportText()">📋 テキストコピー</button>
+    </div>
+  </div>
+</main>
+
+<script src="checker.js"></script>
+</body>
+</html>

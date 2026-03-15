@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tranzForma XML clone tool</title>
+<link rel="stylesheet" href="../shared/common.css">
+<style>
+/* clone tool 固有スタイル */
+.tree-area {
+  flex: 0 0 auto; max-height: 40%; overflow-y: auto;
+  margin: 8px 16px; padding: 10px; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; font: 400 12px var(--mono);
+}
+.tree-node {
+  padding: 4px 8px; border-radius: 4px; cursor: pointer; transition: background 0.1s;
+  display: flex; align-items: center; gap: 6px; user-select: none;
+}
+.tree-node:hover { background: var(--border); }
+.tree-node.selected { background: var(--accent-dim); outline: 1px solid var(--accent); }
+.tree-node .icon { font-size: 11px; width: 16px; text-align: center; }
+.tree-node .tag { color: var(--accent); }
+.tree-node .dim { color: var(--warn); }
+.tree-node .lbl { color: var(--text2); }
+.tree-children { margin-left: 20px; }
+.tree-empty { color: var(--text3); font: 400 12px var(--mono); padding: 12px; text-align: center; }
+
+.clone-controls {
+  margin: 0 16px 8px; padding: 10px 14px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px;
+  display: none; align-items: center; gap: 12px; font: 400 12px var(--sans);
+}
+.clone-controls.visible { display: flex; }
+.clone-controls .selected-name { color: var(--accent); font: 600 12px var(--mono); }
+.clone-controls input[type="number"] {
+  width: 50px; padding: 4px 8px; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text); font: 500 12px var(--mono); outline: none;
+}
+
+.result-area { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.log-area {
+  margin: 8px 16px; padding: 10px; background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 8px; overflow-y: auto; font: 400 11px/1.8 var(--mono); color: var(--text2);
+  max-height: 200px;
+}
+.log-area .old { color: var(--error); }
+.log-area .new { color: var(--ok); }
+</style>
+</head>
+<body>
+
+<header>
+  <img src="../shared/logo.png" alt="tranzForma">
+  <h1><span>tranzForma</span> XML clone tool</h1>
+  <span class="ver">v1.0</span>
+</header>
+
+<main>
+  <!-- Left Pane -->
+  <div class="pane">
+    <div class="pane-header">Input — XML</div>
+    <textarea id="xmlInput" placeholder="XMLを貼り付けてください"></textarea>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="parseAndShowTree()">📊 構造解析</button>
+      <button class="btn btn-secondary" onclick="clearAll()">クリア</button>
+    </div>
+    <div class="tree-area" id="treeArea">
+      <div class="tree-empty">XMLを入力して構造解析を実行してください</div>
+    </div>
+    <div class="clone-controls" id="cloneControls">
+      <span>選択中:</span>
+      <span class="selected-name" id="selectedName">—</span>
+      <span>×</span>
+      <input type="number" id="cloneCount" value="1" min="1" max="20">
+      <span>個複製</span>
+      <button class="btn btn-fix" onclick="executeClone()">🔄 複製実行</button>
+    </div>
+  </div>
+
+  <!-- Right Pane -->
+  <div class="pane">
+    <div class="pane-header">Result</div>
+    <div class="result-area">
+      <textarea id="resultXml" placeholder="複製結果がここに表示されます" readonly></textarea>
+      <div class="log-area" id="log"></div>
+      <div class="btn-row">
+        <button class="btn btn-fix" id="copyBtn" onclick="copyResult()" style="display:none">📋 結果XMLをコピー</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="clone.js"></script>
+</body>
+</html>
