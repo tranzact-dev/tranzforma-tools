@@ -24,8 +24,8 @@ body { justify-content: flex-start; }
 .apd-slot { display: flex; flex-direction: column; gap: 6px; }
 .apd-drop-wrap { display: flex; flex-direction: column; gap: 6px; }
 .apd-drop-label { font: 600 11px var(--mono); color: var(--text3); letter-spacing: 0.1em; text-transform: uppercase; }
-.slot-actions { display: flex; }
-.slot-actions .btn { width: 100%; justify-content: center; }
+.slot-actions { display: flex; gap: 6px; }
+.slot-actions .btn { flex: 1; justify-content: center; font-size: 12px; padding: 7px 8px; }
 
 .apd-drop {
   border: 2px dashed var(--border); border-radius: 8px;

@@ -1,12 +1,12 @@
 // ═══════════════════════════════════════════════════════════════════
 // State
 // ═══════════════════════════════════════════════════════════════════
-let apdA           = null;   // { fileName, forms[] }
-let apdB           = null;   // { fileName, forms[] }
-let compareResults = null;   // result[]
+let apdA           = null;   // { fileName, forms[], ledgers[], dims[], scripts[] }
+let apdB           = null;
+let compareResults = null;
 let statusFilter   = 'ALL';
 let migrateDir     = 'AtoB';
-let activeListSide = null;   // 'A' | 'B'
+let activeResult   = null;   // { type: 'list'|'ledger'|'script'|'compare', side: 'A'|'B'|null }
 
 // ═══════════════════════════════════════════════════════════════════
 // Drop zone setup
@@ -14,7 +14,6 @@ let activeListSide = null;   // 'A' | 'B'
 function setupDrop(dropId, inputId, onLoad) {
   const drop  = document.getElementById(dropId);
   const input = document.getElementById(inputId);
-
   drop.addEventListener('click', () => input.click());
   drop.addEventListener('dragover',  e => { e.preventDefault(); drop.classList.add('dragover'); });
   drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
@@ -43,11 +42,19 @@ function parseName(raw) {
   return { en, ja };
 }
 
-function parseAPD(xmlText) {
+function loadAPD(xmlText) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xmlText, 'application/xml');
   if (doc.querySelector('parsererror')) throw new Error('XMLの構文が正しくありません');
+  return {
+    forms:   parseForms(doc),
+    ...parseLedgers(doc),
+    scripts: parseScripts(doc),
+  };
+}
 
+// ─── フォーム ───────────────────────────────────────────────────────
+function parseForms(doc) {
   const entry = doc.querySelector('entries > entry');
   if (!entry) throw new Error('entries > entry が見つかりません。APDファイルか確認してください。');
 
@@ -58,7 +65,8 @@ function parseAPD(xmlText) {
     el => el.getAttribute('type') === 'FORM_LISTS'
   );
 
-  const forms = [];
+  const parser = new DOMParser();
+  const forms  = [];
 
   for (const flContainer of formListsContainers) {
     const flElements = flContainer.querySelector(':scope > elements');
@@ -83,19 +91,17 @@ function parseAPD(xmlText) {
         const formElems = form.querySelector(':scope > elements');
         if (!formElems) continue;
 
-        const docSpec = [...formElems.children].find(el => {
+        const docSpec    = [...formElems.children].find(el => {
           const t = el.getAttribute('type');
           return t === 'DOCUMENT_SPEC' || t === 'SIMPLE_DOCUMENT_SPEC';
         });
-
         const xmlContent = docSpec?.querySelector('content')?.textContent?.trim() || '';
 
         const fd = {
           flLabel, flName: flNameStr, formLabel,
           formNameJa: '', formNameEn: '',
           reflectCalc: '', import: '', export: '',
-          parameters: '', triggers: '',
-          xml: xmlContent
+          parameters: '', triggers: '', xml: xmlContent
         };
 
         if (xmlContent) {
@@ -103,21 +109,16 @@ function parseAPD(xmlText) {
             const fDoc = parser.parseFromString(xmlContent, 'application/xml');
             if (!fDoc.querySelector('parsererror')) {
               const root = fDoc.documentElement;
-
-              const np = parseName(root.querySelector(':scope > name')?.textContent || '');
+              const np   = parseName(root.querySelector(':scope > name')?.textContent || '');
               fd.formNameJa = np.ja;
               fd.formNameEn = np.en;
-
               fd.reflectCalc = [...root.querySelectorAll('reflect-calc')]
                 .some(el => el.textContent === 'true') ? 'ON' : '';
-
               fd.import = root.querySelector('import-spec > enabled')?.textContent === 'true' ? 'ON' : '';
               fd.export = root.querySelector('export-spec > enabled')?.textContent === 'true' ? 'ON' : '';
-
               fd.parameters = [...root.querySelectorAll(
                 'parameter-specs > parameter-spec > member-list-spec > dimension-label'
               )].map(el => el.textContent).join(',');
-
               fd.triggers = [...root.querySelectorAll('triggers > trigger > action')]
                 .map(el => {
                   const type  = el.querySelector('type')?.textContent  || '';
@@ -127,13 +128,83 @@ function parseAPD(xmlText) {
             }
           } catch (_) {}
         }
-
         forms.push(fd);
       }
     }
   }
-
   return forms;
+}
+
+// ─── 元帳設定 ──────────────────────────────────────────────────────
+function parseLedgers(doc) {
+  const appEntry = [...doc.querySelectorAll('entries > entry')]
+    .find(e => e.getAttribute('type') === 'APPLICATION')
+    || doc.querySelector('entries > entry');
+
+  const topElems = appEntry?.querySelector(':scope > elements');
+  if (!topElems) return { ledgers: [], dims: [] };
+
+  const ledgersContainer = [...topElems.children]
+    .find(e => e.getAttribute('type') === 'LEDGERS');
+  if (!ledgersContainer) return { ledgers: [], dims: [] };
+
+  const ledgerElems = ledgersContainer.querySelector(':scope > elements');
+  if (!ledgerElems) return { ledgers: [], dims: [] };
+
+  const ledgers = [];
+  const allDims = new Set();
+
+  for (const node of [...ledgerElems.children].filter(e => e.getAttribute('type') === 'LEDGER')) {
+    const label    = node.getAttribute('label') || '';
+    const elems    = node.querySelector(':scope > elements');
+    const nameEl   = elems ? [...elems.children].find(e => e.getAttribute('type') === 'NAME') : null;
+    const nm       = parseName(nameEl?.querySelector('content')?.textContent || '');
+
+    const usedDimsEl  = elems ? [...elems.children].find(e => e.getAttribute('type') === 'USED_DIMENSIONS') : null;
+    const dimsElems   = usedDimsEl?.querySelector(':scope > elements');
+    const dims        = dimsElems
+      ? [...dimsElems.children]
+          .filter(e => e.getAttribute('type') === 'USED_DIMENSION')
+          .map(e => e.getAttribute('label') || '')
+      : [];
+
+    dims.forEach(d => allDims.add(d));
+    ledgers.push({ label, nameJa: nm.ja, nameEn: nm.en, dims });
+  }
+
+  return { ledgers, dims: [...allDims].sort() };
+}
+
+// ─── スクリプト ────────────────────────────────────────────────────
+function parseScripts(doc) {
+  const appEntry = [...doc.querySelectorAll('entries > entry')]
+    .find(e => e.getAttribute('type') === 'APPLICATION')
+    || doc.querySelector('entries > entry');
+
+  const topElems = appEntry?.querySelector(':scope > elements');
+  if (!topElems) return [];
+
+  const scriptsContainer = [...topElems.children]
+    .find(e => e.getAttribute('type') === 'SCRIPTS');
+  if (!scriptsContainer) return [];
+
+  const scriptsElems = scriptsContainer.querySelector(':scope > elements');
+  if (!scriptsElems) return [];
+
+  return [...scriptsElems.children]
+    .filter(e => e.getAttribute('type') === 'SCRIPT')
+    .map(node => {
+      const label  = node.getAttribute('label') || '';
+      const elems  = node.querySelector(':scope > elements');
+      if (!elems) return { label, nameJa: '', nameEn: '', hasErrors: '', scriptText: '' };
+      const nameEl = [...elems.children].find(e => e.getAttribute('type') === 'NAME');
+      const nm     = parseName(nameEl?.querySelector('content')?.textContent || '');
+      const hasErrors  = [...elems.children].find(e => e.getAttribute('type') === 'HAS_ERRORS')
+        ?.querySelector('content')?.textContent || '';
+      const scriptText = [...elems.children].find(e => e.getAttribute('type') === 'SCRIPT_TEXT')
+        ?.querySelector('content')?.textContent || '';
+      return { label, nameJa: nm.ja, nameEn: nm.en, hasErrors, scriptText };
+    });
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -141,25 +212,25 @@ function parseAPD(xmlText) {
 // ═══════════════════════════════════════════════════════════════════
 function onApdLoaded(side, text, fileName) {
   try {
-    const forms = parseAPD(text);
-    const data  = { fileName, forms };
+    const data = { fileName, ...loadAPD(text) };
     if (side === 'A') apdA = data; else apdB = data;
 
     const dropEl = document.getElementById(`drop${side}`);
     dropEl.classList.add('loaded');
-    dropEl.querySelector('.drop-filename').textContent = `${fileName} (${forms.length}件)`;
+    dropEl.querySelector('.drop-filename').textContent =
+      `${fileName} (フォーム:${data.forms.length} / 台帳:${data.ledgers.length} / スクリプト:${data.scripts.length})`;
 
-    document.getElementById(`listBtn${side}`).disabled = false;
+    ['list', 'ledger', 'script'].forEach(t =>
+      document.getElementById(`${t}Btn${side}`).disabled = false
+    );
     document.getElementById('compareBtn').disabled = !(apdA && apdB);
 
-    // 比較済み結果があれば非表示にリセット
     if (compareResults) {
       compareResults = null;
-      document.getElementById('compareResult').style.display = 'none';
-      document.getElementById('resultArea').style.display = 'none';
+      hideAllResults();
     }
 
-    showToast(`[${side}] ${forms.length}件のフォームを読み込みました`);
+    showToast(`[${side}] ${data.forms.length}件のフォームを読み込みました`);
   } catch (e) {
     showToast(e.message, 'error');
   }
@@ -169,22 +240,35 @@ setupDrop('dropA', 'fileA', (t, f) => onApdLoaded('A', t, f));
 setupDrop('dropB', 'fileB', (t, f) => onApdLoaded('B', t, f));
 
 // ═══════════════════════════════════════════════════════════════════
+// Result visibility
+// ═══════════════════════════════════════════════════════════════════
+function showResult(type) {
+  ['list', 'ledger', 'script', 'compare'].forEach(t =>
+    document.getElementById(`${t}Result`).style.display = t === type ? '' : 'none'
+  );
+  document.getElementById('resultArea').style.display = '';
+}
+
+function hideAllResults() {
+  ['list', 'ledger', 'script', 'compare'].forEach(t =>
+    document.getElementById(`${t}Result`).style.display = 'none'
+  );
+  document.getElementById('resultArea').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // フォーム一覧
 // ═══════════════════════════════════════════════════════════════════
 function renderListResult(side) {
   const apd = side === 'A' ? apdA : apdB;
   if (!apd) return;
-  activeListSide = side;
+  activeResult = { type: 'list', side };
+  showResult('list');
 
-  document.getElementById('resultArea').style.display = '';
-  document.getElementById('listResult').style.display = '';
-  document.getElementById('compareResult').style.display = 'none';
-
-  const forms = apd.forms;
   document.getElementById('listSummary').textContent =
-    `[APD-${side}] ${apd.fileName} — ${forms.length}件のフォーム`;
+    `[APD-${side}] ${apd.fileName} — ${apd.forms.length}件`;
 
-  document.getElementById('listTbody').innerHTML = forms.map(f => `
+  document.getElementById('listTbody').innerHTML = apd.forms.map(f => `
     <tr>
       <td class="label-cell">${esc(f.flLabel)}</td>
       <td>${esc(f.flName)}</td>
@@ -199,23 +283,126 @@ function renderListResult(side) {
     </tr>`).join('');
 }
 
+async function downloadFormZip() {
+  const apd = activeResult?.side === 'A' ? apdA : apdB;
+  if (!apd || !apd.forms.length) { showToast('フォームがありません', 'error'); return; }
+  if (typeof JSZip === 'undefined') {
+    showToast('JSZipが読み込めません。インターネット接続を確認してください。', 'error'); return;
+  }
+  const zip = new JSZip();
+  for (const f of apd.forms) {
+    if (f.xml) zip.file(`${f.formLabel}.txt`, f.xml);
+  }
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const blob    = await zip.generateAsync({ type: 'blob' });
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement('a');
+  a.href = url; a.download = `forms_APD-${activeResult.side}_${dateStr}.zip`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast(`${apd.forms.length}件のフォームをダウンロードしました`);
+}
+
 function copyListTSV() {
-  const apd = activeListSide === 'A' ? apdA : apdB;
+  const apd = activeResult?.side === 'A' ? apdA : apdB;
   if (!apd) return;
   const header = 'FORM_LIST_LABEL\tFORM_LIST_NAME\tFORM_LABEL\tFORM_NAME_JA\tFORM_NAME_EN\tREFLECT_CALC\tIMPORT\tEXPORT\tPARAMETERS\tTRIGGERS';
-  const rows = apd.forms.map(f =>
+  const rows   = apd.forms.map(f =>
     [f.flLabel, f.flName, f.formLabel, f.formNameJa, f.formNameEn,
      f.reflectCalc, f.import, f.export, f.parameters, f.triggers].join('\t')
   );
-  const tsv = [header, ...rows].join('\r\n');
-  navigator.clipboard.writeText(tsv).then(() => {
-    showToast('TSVをクリップボードにコピーしました。Excelにそのまま貼り付けできます。');
-  }).catch(() => {
-    const tmp = document.createElement('textarea');
-    tmp.value = tsv; document.body.appendChild(tmp);
-    tmp.select(); document.execCommand('copy'); document.body.removeChild(tmp);
-    showToast('TSVをコピーしました');
-  });
+  copyText([header, ...rows].join('\r\n'), 'TSVをコピーしました');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 元帳設定
+// ═══════════════════════════════════════════════════════════════════
+function renderLedgerResult(side) {
+  const apd = side === 'A' ? apdA : apdB;
+  if (!apd) return;
+  activeResult = { type: 'ledger', side };
+  showResult('ledger');
+
+  const { ledgers, dims } = apd;
+  document.getElementById('ledgerSummary').textContent =
+    `[APD-${side}] ${apd.fileName} — 台帳:${ledgers.length}件 / ディメンション:${dims.length}件`;
+
+  // Header: ディメンション列 + 各台帳（label / nameJa）
+  document.getElementById('ledgerThead').innerHTML = `
+    <tr>
+      <th>ディメンション</th>
+      ${ledgers.map(l => `<th title="${esc(l.nameJa)}">${esc(l.label)}<br><span style="font-weight:400;opacity:0.7">${esc(l.nameJa)}</span></th>`).join('')}
+    </tr>`;
+
+  // Rows: 1行 = 1ディメンション
+  document.getElementById('ledgerTbody').innerHTML = dims.map(dim => `
+    <tr>
+      <td class="label-cell">${esc(dim)}</td>
+      ${ledgers.map(l => `<td class="${l.dims.includes(dim) ? 'on' : ''}">${l.dims.includes(dim) ? '●' : ''}</td>`).join('')}
+    </tr>`).join('');
+}
+
+function copyLedgerTSV() {
+  const apd = activeResult?.side === 'A' ? apdA : apdB;
+  if (!apd) return;
+  const { ledgers, dims } = apd;
+  const row1 = ['', ...ledgers.map(l => l.nameJa)].join('\t');
+  const row2 = ['DIMENSION', ...ledgers.map(l => l.label)].join('\t');
+  const rows = dims.map(dim =>
+    [dim, ...ledgers.map(l => l.dims.includes(dim) ? '1' : '')].join('\t')
+  );
+  copyText([row1, row2, ...rows].join('\r\n'), '元帳設定TSVをコピーしました');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// スクリプト
+// ═══════════════════════════════════════════════════════════════════
+function renderScriptResult(side) {
+  const apd = side === 'A' ? apdA : apdB;
+  if (!apd) return;
+  activeResult = { type: 'script', side };
+  showResult('script');
+
+  document.getElementById('scriptSummary').textContent =
+    `[APD-${side}] ${apd.fileName} — ${apd.scripts.length}件`;
+
+  document.getElementById('scriptTbody').innerHTML = apd.scripts.map(s => `
+    <tr>
+      <td class="label-cell">${esc(s.label)}</td>
+      <td>${esc(s.nameJa)}</td>
+      <td>${esc(s.nameEn)}</td>
+      <td class="${s.hasErrors === 'true' ? 'on' : ''}" style="${s.hasErrors === 'true' ? 'color:var(--error)' : ''}">${s.hasErrors === 'true' ? 'あり' : ''}</td>
+    </tr>`).join('');
+}
+
+function copyScriptTSV() {
+  const apd = activeResult?.side === 'A' ? apdA : apdB;
+  if (!apd) return;
+  const header = 'LABEL\tNAME_JA\tNAME_EN\tHAS_ERRORS';
+  const rows   = apd.scripts.map(s =>
+    [s.label, s.nameJa, s.nameEn, s.hasErrors].join('\t')
+  );
+  copyText([header, ...rows].join('\r\n'), 'スクリプト一覧TSVをコピーしました');
+}
+
+async function downloadScriptZip() {
+  const apd = activeResult?.side === 'A' ? apdA : apdB;
+  if (!apd || !apd.scripts.length) { showToast('スクリプトがありません', 'error'); return; }
+  if (typeof JSZip === 'undefined') {
+    showToast('JSZipが読み込めません。インターネット接続を確認してください。', 'error'); return;
+  }
+  const zip = new JSZip();
+  for (const s of apd.scripts) {
+    zip.file(`Script_${s.label}.txt`, s.scriptText);
+  }
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const blob    = await zip.generateAsync({ type: 'blob' });
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement('a');
+  a.href     = url;
+  a.download = `scripts_APD-${activeResult.side}_${dateStr}.zip`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`${apd.scripts.length}件のスクリプトをダウンロードしました`);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -230,8 +417,7 @@ function runCompare() {
 
   compareResults = [];
   for (const label of [...allLabels].sort()) {
-    const inA = mapA.has(label);
-    const inB = mapB.has(label);
+    const inA = mapA.has(label), inB = mapB.has(label);
     let status, formA = mapA.get(label) || null, formB = mapB.get(label) || null;
     if (inA && !inB)      status = 'A_ONLY';
     else if (!inA && inB) status = 'B_ONLY';
@@ -239,10 +425,9 @@ function runCompare() {
     compareResults.push({ label, status, formA, formB });
   }
 
+  activeResult = { type: 'compare', side: null };
   statusFilter = 'ALL';
-  document.getElementById('resultArea').style.display = '';
-  document.getElementById('listResult').style.display = 'none';
-  document.getElementById('compareResult').style.display = '';
+  showResult('compare');
   renderCompareResults();
   updateMigrateInfo();
   showToast(`比較完了: ${compareResults.length}件`);
@@ -266,8 +451,7 @@ function renderCompareResults() {
           onclick="setStatusFilter('${d.key}')">${d.label}</span>`).join('');
 
   const filtered = statusFilter === 'ALL'
-    ? compareResults
-    : compareResults.filter(r => r.status === statusFilter);
+    ? compareResults : compareResults.filter(r => r.status === statusFilter);
 
   const stMap = {
     SAME:      `<span class="st st-same">SAME</span>`,
@@ -275,8 +459,8 @@ function renderCompareResults() {
     A_ONLY:    `<span class="st st-aonly">A ONLY</span>`,
     B_ONLY:    `<span class="st st-bonly">B ONLY</span>`,
   };
-
   const rowClass = { DIFFERENT: 'row-diff', A_ONLY: 'row-aonly', B_ONLY: 'row-bonly', SAME: '' };
+
   document.getElementById('compareTbody').innerHTML = filtered.map(r => {
     const f = r.formA || r.formB;
     return `<tr class="${rowClass[r.status]}">
@@ -292,10 +476,7 @@ function renderCompareResults() {
   }).join('');
 }
 
-function setStatusFilter(f) {
-  statusFilter = f;
-  renderCompareResults();
-}
+function setStatusFilter(f) { statusFilter = f; renderCompareResults(); }
 
 // ═══════════════════════════════════════════════════════════════════
 // 移行
@@ -309,13 +490,13 @@ function setDir(dir) {
 
 function getMigrateForms() {
   if (!compareResults) return [];
-  return compareResults.filter(r => {
-    if (migrateDir === 'AtoB') return r.status === 'DIFFERENT' || r.status === 'A_ONLY';
-    else                        return r.status === 'DIFFERENT' || r.status === 'B_ONLY';
-  }).map(r => ({
-    formLabel: r.label,
-    status:    r.status,
-    xml:       (migrateDir === 'AtoB' ? r.formA : r.formB)?.xml || ''
+  return compareResults.filter(r =>
+    migrateDir === 'AtoB'
+      ? r.status === 'DIFFERENT' || r.status === 'A_ONLY'
+      : r.status === 'DIFFERENT' || r.status === 'B_ONLY'
+  ).map(r => ({
+    formLabel: r.label, status: r.status,
+    xml: (migrateDir === 'AtoB' ? r.formA : r.formB)?.xml || ''
   }));
 }
 
@@ -325,41 +506,39 @@ function updateMigrateInfo() {
   const diffCount = forms.filter(f => f.status === 'DIFFERENT').length;
   const onlyCount = forms.filter(f => f.status !== 'DIFFERENT').length;
   document.getElementById('migrateInfo').innerHTML =
-    `方向: <strong>${dir}</strong> &nbsp;|&nbsp; ` +
-    `対象: <strong>${forms.length}件</strong>` +
+    `方向: <strong>${dir}</strong> &nbsp;|&nbsp; 対象: <strong>${forms.length}件</strong>` +
     (diffCount ? ` &nbsp;（差分あり ${diffCount}件 + ${migrateDir === 'AtoB' ? 'Aのみ' : 'Bのみ'} ${onlyCount}件）` : '');
 }
 
 async function downloadMigrate() {
   const forms = getMigrateForms();
   if (!forms.length) { showToast('移行対象のフォームがありません', 'error'); return; }
-
   if (typeof JSZip === 'undefined') {
-    showToast('JSZipが読み込めませんでした。インターネット接続を確認してください。', 'error');
-    return;
+    showToast('JSZipが読み込めません。インターネット接続を確認してください。', 'error'); return;
   }
-
   const zip = new JSZip();
-  for (const f of forms) {
-    zip.file(`${f.formLabel}.txt`, f.xml);
-  }
-
+  for (const f of forms) zip.file(`${f.formLabel}.txt`, f.xml);
   const dateStr = new Date().toISOString().slice(0, 10);
-  const dir     = migrateDir === 'AtoB' ? 'A_to_B' : 'B_to_A';
   const blob    = await zip.generateAsync({ type: 'blob' });
   const url     = URL.createObjectURL(blob);
   const a       = document.createElement('a');
-  a.href     = url;
-  a.download = `migrate_${dir}_${dateStr}.zip`;
-  a.click();
-  URL.revokeObjectURL(url);
-
+  a.href = url; a.download = `migrate_${migrateDir === 'AtoB' ? 'A_to_B' : 'B_to_A'}_${dateStr}.zip`;
+  a.click(); URL.revokeObjectURL(url);
   showToast(`${forms.length}件をダウンロードしました`);
 }
 
 // ═══════════════════════════════════════════════════════════════════
 // Utilities
 // ═══════════════════════════════════════════════════════════════════
+function copyText(text, msg) {
+  navigator.clipboard.writeText(text).then(() => showToast(msg)).catch(() => {
+    const tmp = document.createElement('textarea');
+    tmp.value = text; document.body.appendChild(tmp);
+    tmp.select(); document.execCommand('copy'); document.body.removeChild(tmp);
+    showToast(msg);
+  });
+}
+
 function showToast(msg, type) {
   const t = document.getElementById('toast');
   t.textContent      = msg;
