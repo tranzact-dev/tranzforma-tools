@@ -6,45 +6,107 @@
 <title>tranzForma XML clone tool</title>
 <link rel="stylesheet" href="../shared/common.css">
 <style>
-/* clone tool 固有スタイル */
+body { height: 100vh; overflow: hidden; }
+
+/* ─── App shell ─── */
+.clone-app {
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
+}
+
+/* ─── Input section ─── */
+.input-section {
+  padding: 10px 20px 10px; border-bottom: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0;
+}
+.input-label {
+  font: 600 10px var(--mono); color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 6px;
+}
+.input-row {
+  display: flex; gap: 10px; align-items: flex-start;
+}
+.input-row textarea {
+  flex: 1; margin: 0; height: 88px; font-size: 12px; line-height: 1.6;
+}
+.input-btns {
+  display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
+}
+
+/* ─── Tree section ─── */
+.tree-section {
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
+}
+.tree-header {
+  padding: 8px 20px; border-bottom: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0;
+  display: flex; align-items: center; gap: 12px;
+}
+.tree-header-label {
+  font: 600 11px var(--mono); color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.1em;
+}
+.tree-status {
+  font: 400 12px var(--mono); color: var(--ok);
+}
 .tree-area {
-  flex: 0 0 auto; max-height: 40%; overflow-y: auto;
-  margin: 8px 16px; padding: 10px; background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 8px; font: 400 12px var(--mono);
+  flex: 1; overflow-y: auto; padding: 14px 20px;
+  font: 400 13px var(--mono);
+}
+.tree-area::-webkit-scrollbar { width: 5px; }
+.tree-area::-webkit-scrollbar-track { background: transparent; }
+.tree-area::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+
+/* ─── Tree nodes ─── */
+.axis-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; font: 600 13px var(--mono); color: var(--text);
+  cursor: default; user-select: none;
 }
 .tree-node {
-  padding: 4px 8px; border-radius: 4px; cursor: pointer; transition: background 0.1s;
-  display: flex; align-items: center; gap: 6px; user-select: none;
+  padding: 5px 10px; border-radius: 5px; cursor: pointer;
+  transition: background 0.1s;
+  display: flex; align-items: center; gap: 8px; user-select: none;
 }
 .tree-node:hover { background: var(--border); }
 .tree-node.selected { background: var(--accent-dim); outline: 1px solid var(--accent); }
-.tree-node .icon { font-size: 11px; width: 16px; text-align: center; }
+.tree-node.new-node { background: rgba(78,202,139,0.1); }
+.tree-node.new-node:hover { background: rgba(78,202,139,0.18); }
+.tree-node .icon { font-size: 13px; width: 20px; text-align: center; flex-shrink: 0; }
 .tree-node .tag { color: var(--accent); }
 .tree-node .dim { color: var(--warn); }
 .tree-node .lbl { color: var(--text2); }
-.tree-children { margin-left: 20px; }
-.tree-empty { color: var(--text3); font: 400 12px var(--mono); padding: 12px; text-align: center; }
+.new-badge {
+  font: 600 9px var(--mono); padding: 1px 6px; border-radius: 3px;
+  background: rgba(78,202,139,0.2); color: var(--ok);
+  letter-spacing: 0.05em; margin-left: auto;
+}
+.tree-children {
+  margin-left: 20px;
+  border-left: 1px solid var(--border);
+  padding-left: 4px;
+}
+.tree-empty {
+  color: var(--text3); font: 400 13px var(--mono);
+  padding: 60px 20px; text-align: center;
+}
 
-.clone-controls {
-  margin: 0 16px 8px; padding: 10px 14px; background: var(--surface);
-  border: 1px solid var(--border); border-radius: 8px;
-  display: none; align-items: center; gap: 12px; font: 400 12px var(--sans);
+/* ─── Controls bar ─── */
+.controls-bar {
+  padding: 10px 20px; border-top: 1px solid var(--border);
+  background: var(--surface); flex-shrink: 0;
+  display: none; align-items: center; gap: 10px; flex-wrap: wrap;
 }
-.clone-controls.visible { display: flex; }
-.clone-controls .selected-name { color: var(--accent); font: 600 12px var(--mono); }
-.clone-controls input[type="number"] {
-  width: 50px; padding: 4px 8px; background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 4px; color: var(--text); font: 500 12px var(--mono); outline: none;
+.controls-bar.visible { display: flex; }
+.ctrl-label { font: 400 13px var(--sans); color: var(--text2); white-space: nowrap; }
+.selected-name { color: var(--accent); font: 600 13px var(--mono); }
+.ctrl-spacer { flex: 1; }
+.controls-bar input[type="number"] {
+  width: 54px; padding: 5px 8px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text); font: 500 13px var(--mono);
+  outline: none; text-align: center;
 }
-
-.result-area { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.log-area {
-  margin: 8px 16px; padding: 10px; background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 8px; overflow-y: auto; font: 400 11px/1.8 var(--mono); color: var(--text2);
-  max-height: 200px;
-}
-.log-area .old { color: var(--error); }
-.log-area .new { color: var(--ok); }
+.controls-bar input[type="number"]:focus { border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -52,43 +114,47 @@
 <header>
   <img src="../shared/logo.png" alt="tranzForma">
   <h1><span>tranzForma</span> XML clone tool</h1>
-  <span class="ver">v1.0</span>
+  <span class="ver">v2.0</span>
 </header>
 
-<main>
-  <!-- Left Pane -->
-  <div class="pane">
-    <div class="pane-header">Input — XML</div>
-    <textarea id="xmlInput" placeholder="XMLを貼り付けてください"></textarea>
-    <div class="btn-row">
-      <button class="btn btn-primary" onclick="parseAndShowTree()">📊 構造解析</button>
-      <button class="btn btn-secondary" onclick="clearAll()">クリア</button>
+<div class="clone-app">
+
+  <!-- Input section -->
+  <div class="input-section">
+    <div class="input-label">Input XML</div>
+    <div class="input-row">
+      <textarea id="xmlInput" placeholder="XMLを貼り付けてください"></textarea>
+      <div class="input-btns">
+        <button class="btn btn-primary" onclick="parseAndShowTree()">📊 構造解析</button>
+        <button class="btn btn-secondary" onclick="clearAll()">クリア</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tree section -->
+  <div class="tree-section">
+    <div class="tree-header">
+      <span class="tree-header-label">構造ツリー</span>
+      <span id="treeStatus" class="tree-status"></span>
+      <div class="ctrl-spacer"></div>
+      <button class="btn btn-fix btn-sm" id="copyBtn" onclick="copyResult()" style="display:none">📋 XMLをコピー</button>
     </div>
     <div class="tree-area" id="treeArea">
       <div class="tree-empty">XMLを入力して構造解析を実行してください</div>
     </div>
-    <div class="clone-controls" id="cloneControls">
-      <span>選択中:</span>
-      <span class="selected-name" id="selectedName">—</span>
-      <span>×</span>
-      <input type="number" id="cloneCount" value="1" min="1" max="20">
-      <span>個複製</span>
-      <button class="btn btn-fix" onclick="executeClone()">🔄 複製実行</button>
-    </div>
   </div>
 
-  <!-- Right Pane -->
-  <div class="pane">
-    <div class="pane-header">Result</div>
-    <div class="result-area">
-      <textarea id="resultXml" placeholder="複製結果がここに表示されます" readonly></textarea>
-      <div class="log-area" id="log"></div>
-      <div class="btn-row">
-        <button class="btn btn-fix" id="copyBtn" onclick="copyResult()" style="display:none">📋 結果XMLをコピー</button>
-      </div>
-    </div>
+  <!-- Clone controls (shown when node selected) -->
+  <div class="controls-bar" id="cloneControls">
+    <span class="ctrl-label">選択中:</span>
+    <span class="selected-name" id="selectedName">—</span>
+    <span class="ctrl-label">×</span>
+    <input type="number" id="cloneCount" value="1" min="1" max="20">
+    <span class="ctrl-label">個複製</span>
+    <button class="btn btn-fix" onclick="executeClone()">🔄 複製実行</button>
   </div>
-</main>
+
+</div>
 
 <script src="clone.js"></script>
 </body>
