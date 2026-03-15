@@ -7,25 +7,83 @@
 <link rel="stylesheet" href="shared/common.css">
 <style>
 body { justify-content: flex-start; }
-.tools-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px; padding: 32px 24px; max-width: 900px; margin: 0 auto; width: 100%;
+
+.portal-body {
+  max-width: 860px; margin: 0 auto; width: 100%;
+  padding: 32px 24px; display: flex; flex-direction: column; gap: 32px;
 }
-.tool-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-  padding: 24px; display: flex; flex-direction: column; gap: 12px;
-  text-decoration: none; color: var(--text); transition: all 0.2s;
+
+/* ─── Section Label ─── */
+.section-label {
+  font: 600 10px var(--mono); color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.1em;
+  margin-bottom: 12px;
 }
-.tool-card:hover { border-color: var(--accent); background: var(--surface2); transform: translateY(-2px); }
-.tool-card .card-icon { font-size: 28px; }
-.tool-card .card-title { font: 700 15px var(--sans); }
-.tool-card .card-title span { color: var(--accent); }
-.tool-card .card-ver { font: 500 10px var(--mono); color: var(--text3); }
-.tool-card .card-desc { font: 400 12px var(--sans); color: var(--text2); line-height: 1.7; }
-.page-title {
-  padding: 28px 24px 0; max-width: 900px; margin: 0 auto; width: 100%;
-  font: 400 13px var(--mono); color: var(--text3);
+
+/* ─── What's New ─── */
+.whats-new {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden;
 }
+.news-item {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+}
+.news-item:last-child { border-bottom: none; }
+.news-date { font: 500 10px var(--mono); color: var(--text3); min-width: 72px; padding-top: 2px; }
+.news-badge { font: 600 9px var(--mono); padding: 2px 7px; border-radius: 3px; min-width: 48px; text-align: center; }
+.badge-new  { background: rgba(91,141,239,0.15);  color: #5b8def; }
+.badge-fix  { background: rgba(78,202,139,0.15);   color: #4eca8b; }
+.badge-info { background: rgba(100,181,246,0.12);  color: #64b5f6; }
+.news-text  { font: 400 12px var(--sans); color: var(--text2); line-height: 1.6; }
+.news-text strong { color: var(--text); font-weight: 600; }
+
+/* ─── Category ─── */
+.category { display: flex; flex-direction: column; gap: 8px; }
+.category-header {
+  display: flex; align-items: center; gap: 10px;
+  padding-bottom: 8px; border-bottom: 1px solid var(--border);
+}
+.category-name {
+  font: 600 11px var(--mono); color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.tool-list { display: flex; flex-direction: column; gap: 6px; }
+
+/* ─── Tool Row ─── */
+.tool-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 14px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 8px;
+  text-decoration: none; color: var(--text); transition: all 0.15s;
+}
+.tool-row:hover { border-color: var(--accent); background: var(--surface2); }
+.tool-row.disabled { pointer-events: none; opacity: 0.4; }
+
+.tool-icon {
+  width: 34px; height: 34px; border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; flex-shrink: 0;
+}
+.icon-blue   { background: rgba(91,141,239,0.12); }
+.icon-amber  { background: rgba(228,168,66,0.12); }
+.icon-teal   { background: rgba(78,202,139,0.12); }
+.icon-purple { background: rgba(150,120,255,0.12); }
+
+.tool-info { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.tool-name { font: 600 13px var(--sans); color: var(--text); }
+.tool-desc { font: 400 11px var(--sans); color: var(--text2); line-height: 1.5; }
+
+.tool-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.tool-ver { font: 500 10px var(--mono); color: var(--text3); }
+
+/* ─── Status Badge ─── */
+.status { font: 600 9px var(--mono); padding: 2px 7px; border-radius: 3px; letter-spacing: 0.03em; }
+.status-stable { background: rgba(78,202,139,0.15);  color: #4eca8b; }
+.status-beta   { background: rgba(228,168,66,0.15);  color: #e4a842; }
+.status-dev    { background: rgba(100,181,246,0.12); color: #64b5f6; }
+
+.arrow { font-size: 14px; color: var(--text3); }
 </style>
 </head>
 <body>
@@ -35,36 +93,124 @@ body { justify-content: flex-start; }
   <h1><span>tranzForma</span> Tools</h1>
 </header>
 
-<div class="page-title">fusion_place 開発支援ツール群</div>
+<div class="portal-body">
 
-<div class="tools-grid">
-
-  <a class="tool-card" href="xml-review/">
-    <div class="card-icon">🔍</div>
-    <div>
-      <div class="card-title"><span>tranzForma</span> XML review tool</div>
-      <div class="card-ver">v2.0</div>
+  <!-- What's New -->
+  <div>
+    <div class="section-label">What's New</div>
+    <div class="whats-new">
+      <div class="news-item">
+        <span class="news-date">2026-03-15</span>
+        <span class="news-badge badge-new">NEW</span>
+        <span class="news-text"><strong>XML format tool v1.0</strong> — フォーム定義XMLの表示設定をGUIで編集する新ツールを追加。</span>
+      </div>
+      <div class="news-item">
+        <span class="news-date">2026-03-15</span>
+        <span class="news-badge badge-new">NEW</span>
+        <span class="news-text"><strong>XML review tool</strong> — ヘルプページを追加。チェック結果のコードをクリックで詳細説明にジャンプ。</span>
+      </div>
+      <div class="news-item">
+        <span class="news-date">2026-03-15</span>
+        <span class="news-badge badge-fix">UPD</span>
+        <span class="news-text"><strong>XML review tool v2.0</strong> — モックHTMLに基づきチェックロジック・メッセージ文言・エクスポート書式を更新。</span>
+      </div>
+      <div class="news-item">
+        <span class="news-date">2026-03-15</span>
+        <span class="news-badge badge-info">INFO</span>
+        <span class="news-text">ポータルページ公開。GitHub Pages にて運用開始。</span>
+      </div>
+      <div class="news-item">
+        <span class="news-date">2026-03-11</span>
+        <span class="news-badge badge-new">NEW</span>
+        <span class="news-text"><strong>XML review tool v1.0</strong> / <strong>XML clone tool v1.0</strong> — 初版リリース。</span>
+      </div>
     </div>
-    <div class="card-desc">fusion_place フォーム定義XMLのチェックツール。命名規約・設定ミスを自動検出。COM/REF/IMP/EXP/PIPパターン対応。</div>
-  </a>
+  </div>
 
-  <a class="tool-card" href="xml-format/">
-    <div class="card-icon">✏️</div>
-    <div>
-      <div class="card-title"><span>tranzForma</span> XML format tool</div>
-      <div class="card-ver">v1.0</div>
+  <!-- Forms -->
+  <div class="category">
+    <div class="category-header">
+      <span class="category-name">Forms</span>
     </div>
-    <div class="card-desc">フォーム定義XMLの表示設定を変更するGUIツール。suppress-if-no-data・item-addition-prohibited・suppressed・タイトルを個別/一括で編集。</div>
-  </a>
+    <div class="tool-list">
+      <a class="tool-row" href="xml-review/">
+        <div class="tool-icon icon-blue">🔍</div>
+        <div class="tool-info">
+          <span class="tool-name">XML review tool</span>
+          <span class="tool-desc">フォーム定義XMLのチェックツール。命名規約・設定ミスを自動検出。COM / REF / IMP / EXP / PIP パターン対応。</span>
+        </div>
+        <div class="tool-meta">
+          <span class="status status-stable">stable</span>
+          <span class="tool-ver">v2.0</span>
+          <span class="arrow">›</span>
+        </div>
+      </a>
+      <a class="tool-row" href="xml-format/">
+        <div class="tool-icon icon-teal">✏️</div>
+        <div class="tool-info">
+          <span class="tool-name">XML format tool</span>
+          <span class="tool-desc">フォーム定義XMLの表示設定をGUIで変更するツール。suppress-if-no-data・item-addition-prohibited・suppressed・タイトルを個別/一括で編集。</span>
+        </div>
+        <div class="tool-meta">
+          <span class="status status-stable">stable</span>
+          <span class="tool-ver">v1.0</span>
+          <span class="arrow">›</span>
+        </div>
+      </a>
+      <a class="tool-row" href="xml-clone/">
+        <div class="tool-icon icon-amber">🔄</div>
+        <div class="tool-info">
+          <span class="tool-name">XML clone tool</span>
+          <span class="tool-desc">列・行仕様・ループブロックの複製ツール。id の重複を自動回避しながら関連 cell-spec も含めて複製。</span>
+        </div>
+        <div class="tool-meta">
+          <span class="status status-beta">beta</span>
+          <span class="tool-ver">v1.0</span>
+          <span class="arrow">›</span>
+        </div>
+      </a>
+    </div>
+  </div>
 
-  <a class="tool-card" href="xml-clone/">
-    <div class="card-icon">🔄</div>
-    <div>
-      <div class="card-title"><span>tranzForma</span> XML clone tool</div>
-      <div class="card-ver">v1.0</div>
+  <!-- APD Analyzer -->
+  <div class="category">
+    <div class="category-header">
+      <span class="category-name">APD Analyzer</span>
     </div>
-    <div class="card-desc">列仕様・行仕様・ループブロックを複製するツール。id の重複を自動回避しながら、関連する cell-spec も含めて複製。</div>
-  </a>
+    <div class="tool-list">
+      <a class="tool-row disabled" href="#">
+        <div class="tool-icon icon-teal">📦</div>
+        <div class="tool-info">
+          <span class="tool-name">APD analyzer</span>
+          <span class="tool-desc">fusion_place アプリケーション定義ファイル（.apd）の解析ツール。</span>
+        </div>
+        <div class="tool-meta">
+          <span class="status status-dev">dev</span>
+          <span class="tool-ver">—</span>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <!-- Requester -->
+  <div class="category">
+    <div class="category-header">
+      <span class="category-name">Requester</span>
+    </div>
+    <div class="tool-list">
+      <a class="tool-row disabled" href="#">
+        <div class="tool-icon icon-purple">✏️</div>
+        <div class="tool-info">
+          <span class="tool-name">Requester wizard</span>
+          <span class="tool-desc">リクエスタの作成ウィザード。</span>
+        </div>
+        <div class="tool-meta">
+          <span class="status status-dev">dev</span>
+          <span class="tool-ver">—</span>
+        </div>
+      </a>
+    </div>
+  </div>
 
 </div>
 
