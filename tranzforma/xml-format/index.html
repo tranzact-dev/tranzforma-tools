@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tranzForma XML format tool</title>
+<link rel="stylesheet" href="../shared/common.css">
+<link rel="stylesheet" href="formatter.css">
+</head>
+<body>
+
+<header>
+  <img src="../shared/logo.png" alt="tranzForma">
+  <h1><span>tranzForma</span> XML format tool</h1>
+  <span class="ver">v1.0</span>
+  <div class="header-actions">
+    <span class="change-count" id="changeCount"></span>
+    <button class="btn btn-fix" id="applyBtn" onclick="applyAndCopy()" style="display:none">📋 XMLをコピー</button>
+    <button class="btn btn-secondary" onclick="clearAll()">クリア</button>
+  </div>
+</header>
+
+<div class="global-strip" id="globalStrip" style="display:none">
+  <span class="global-strip-label">フォーム全体:</span>
+  <label>行表示設定
+    <select id="g_rowWiseLayout" onchange="markGlobalChange()">
+      <option value="">（変更なし）</option>
+      <option value="LOOP_HEADERS">LOOP_HEADERS</option>
+      <option value="FIRST_DETAILS">FIRST_DETAILS</option>
+      <option value="ALL_DETAILS">ALL_DETAILS</option>
+    </select>
+  </label>
+  <label>セル保護
+    <select id="g_protected" onchange="markGlobalChange()">
+      <option value="">（変更なし）</option>
+      <option value="true">ON</option>
+      <option value="false">OFF</option>
+    </select>
+  </label>
+</div>
+
+<div class="batch-row" id="batchRow" style="display:none">
+  <span style="font:600 9px var(--mono); color:var(--text3); letter-spacing:0.08em;">一括操作:</span>
+  <button class="btn" id="batchSuppressBtn" onclick="batchCycle('suppressEmpty')">データ無し非表示 全ON</button>
+  <button class="btn" id="batchItemBtn" onclick="batchCycle('itemAddProhibited')">選択行非表示 全ON</button>
+</div>
+
+<div class="three-col">
+
+  <!-- Input Pane -->
+  <div class="pane">
+    <div class="pane-header">Input — XML</div>
+    <div class="input-area" style="flex:1;display:flex;flex-direction:column;min-height:0;">
+      <div class="drop-zone" id="dropZone">
+        <div class="icon">📄</div>
+        XMLファイルをドラッグ＆ドロップ、またはクリックして選択
+        <input type="file" id="fileInput" accept=".xml,.txt">
+      </div>
+      <textarea id="xmlInput" placeholder="またはXMLをここに貼り付けてください"></textarea>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="parseAndRender()">▶ 解析</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tree Pane -->
+  <div class="pane">
+    <div class="pane-header">Tree <span id="treeCount" style="font:400 10px var(--mono); color:var(--text3)">—</span></div>
+    <div id="treeScroll" class="tree-scroll">
+      <div class="edit-empty" style="margin-top:60px">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+        </svg>
+        XMLを入力して解析を実行
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Pane -->
+  <div class="pane">
+    <div class="pane-header">Edit</div>
+    <div id="editEmpty" class="edit-empty">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+      </svg>
+      ノードを選択してください
+    </div>
+    <div id="editPanel" style="display:none"></div>
+  </div>
+
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="formatter.js"></script>
+</body>
+</html>
