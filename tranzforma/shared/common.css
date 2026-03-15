@@ -106,7 +106,8 @@ textarea::placeholder { color: var(--text3); }
 .check-group-header:hover { background: var(--surface2); }
 .check-group-header .arrow { font-size: 10px; color: var(--text3); transition: transform 0.2s; }
 .check-group-header.open .arrow { transform: rotate(90deg); }
-.check-group-header .code { font: 600 11px var(--mono); color: var(--accent); min-width: 62px; }
+.check-group-header .code { font: 600 11px var(--mono); color: var(--accent); min-width: 62px; text-decoration: none; }
+.check-group-header .code:hover { text-decoration: underline; }
 .check-group-header .badge { margin-left: auto; padding: 1px 8px; border-radius: 99px; font: 600 10px var(--mono); }
 .check-group-body { display: none; border-top: 1px solid var(--border); }
 .check-group-body.open { display: block; }

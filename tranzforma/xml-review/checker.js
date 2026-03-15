@@ -841,7 +841,7 @@ function renderResults(issues) {
     html += `<div class="check-group">`;
     html += `<div class="check-group-header" onclick="toggleGroup(this)">`;
     html += `<span class="arrow">▶</span>`;
-    html += `<span class="code">${esc(code)}</span>`;
+    html += `<a class="code" href="help.html#${esc(code)}" target="_blank" onclick="event.stopPropagation()" title="ヘルプを開く">${esc(code)}</a>`;
     html += `<span>${esc(name)}</span>`;
     html += `<span class="badge ${sevClass}">${items.length}件</span>`;
     html += `</div>`;
