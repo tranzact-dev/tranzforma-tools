@@ -80,13 +80,16 @@ function buildTreeHTML(parent, axis, highlightIds) {
       crsCounters[axis.tag] = (crsCounters[axis.tag] || 0) + 1;
       const num = crsCounters[axis.tag];
       const label = child.getAttribute('label') || '';
+      const name = getNameText(child);
       const id = child.getAttribute('id') || '';
       const isNew = id && highlightIds.has(id);
+
+      const info = label && name ? `${label} / ${name}` : (label || name);
 
       html += `<div class="tree-node${isNew ? ' new-node' : ''}" onclick="selectNode(this,'${axis.label}','${id}','crs')">`;
       html += `<span class="icon">▪</span>`;
       html += `<span class="tag">${axis.crsLabel}（${num}）</span>`;
-      if (label) html += `<span class="lbl">${esc(label)}</span>`;
+      if (info) html += `<span class="lbl">${esc(info)}</span>`;
       if (isNew) html += `<span class="new-badge">NEW</span>`;
       html += `</div>`;
     }
@@ -97,6 +100,14 @@ function buildTreeHTML(parent, axis, highlightIds) {
 function getDimLabel(loopEl) {
   const dl = loopEl.querySelector(':scope > member-list-spec > dimension-label');
   return dl ? dl.textContent : '不明';
+}
+
+function getNameText(el) {
+  const nameEl = el.querySelector(':scope > name');
+  if (!nameEl) return '';
+  // Format: en;"value";ja;"値" — extract first quoted value
+  const m = nameEl.textContent.match(/"([^"]*)"/);
+  return m ? m[1] : nameEl.textContent;
 }
 
 // ═══════════════════════════════════════════════════════════════════
