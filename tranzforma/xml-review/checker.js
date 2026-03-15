@@ -81,12 +81,11 @@ function buildPath(el, axisLabel) {
   return parts.concat(ancestors).join(' › ');
 }
 
-/** column-row-specの位置表示を生成（パス付き） */
+/** column-row-specの位置表示を生成 */
 function crsLocation(spec, index, axisLabel) {
   const colOrRow = axisLabel === '列' ? '列' : '行';
   const lbl = spec.getAttribute('label') || '';
-  const path = buildPath(spec, axisLabel + '軸');
-  return `${path} › ${colOrRow}仕様（${index}）${lbl ? ' ' + lbl : ''}`;
+  return `${colOrRow}仕様（${index}）${lbl ? ' ' + lbl : ''}`;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -211,19 +210,19 @@ function checkCOM02(root, issues) {
 
         // ALL は NONE_EXPANSION のみ
         if (pt === 'ALL' && em !== 'NONE_EXPANSION')
-          addIssue(issues, 'COM-02', 'WARN', `peg=ALL に method=${em} は無効`, loc, 'NONE_EXPANSION のみ有効です');
+          addIssue(issues, 'COM-02', 'WARN', `起点メンバ=ALL に 展開方法=${em} は無効です`, loc, 'NONE_EXPANSION のみ有効です');
         // ROOTS は NONE_EXPANSION のみ
         if (pt === 'ROOTS' && em !== 'NONE_EXPANSION')
-          addIssue(issues, 'COM-02', 'WARN', `peg=ROOTS に method=${em} は無効`, loc, 'NONE_EXPANSION のみ有効です');
+          addIssue(issues, 'COM-02', 'WARN', `起点メンバ=ROOTS に 展開方法=${em} は無効です`, loc, 'NONE_EXPANSION のみ有効です');
         // #FY, #PERIOD以外で DESCENDENT_BF
         if (!['#FY', '#PERIOD'].includes(dim) && em === 'DESCENDENT_BF')
-          addIssue(issues, 'COM-02', 'WARN', `ディメンション ${dim} で DESCENDENT_BF は非推奨`, loc);
+          addIssue(issues, 'COM-02', 'WARN', `ディメンション ${dim} で 展開方法=DESCENDENT_BF は非推奨です`, loc);
         // INFO: ROOTS
         if (pt === 'ROOTS')
-          addIssue(issues, 'COM-02', 'INFO', 'peg=ROOTS が使用されています', loc, 'めったに使わない設定です');
+          addIssue(issues, 'COM-02', 'INFO', '起点メンバ=ROOTS が使用されています', loc, 'めったに使わない設定です');
         // INFO: DESCENDENT_BF
         if (em === 'DESCENDENT_BF')
-          addIssue(issues, 'COM-02', 'INFO', 'method=DESCENDENT_BF が使用されています', loc, 'めったに使わない設定です');
+          addIssue(issues, 'COM-02', 'INFO', '展開方法=DESCENDENT_BF が使用されています', loc, 'めったに使わない設定です');
       }
     }
   }
@@ -233,7 +232,7 @@ function checkCOM02(root, issues) {
 function checkCOM03(root, issues) {
   const lm = root.querySelector(':scope > local-mask');
   if (lm && lm.textContent && lm.textContent.trim()) {
-    addIssue(issues, 'COM-03', 'WARN', '元帳マスクが設定されています', '', lm.textContent.trim().substring(0, 100));
+    addIssue(issues, 'COM-03', 'INFO', '元帳マスクが設定されています', '', lm.textContent.trim().substring(0, 100));
   }
 }
 
@@ -283,7 +282,7 @@ function checkCOM06(root, issues) {
     const methodRe = /\.([A-Z][a-zA-Z0-9_]*)/g;
     let m;
     while ((m = methodRe.exec(activeText)) !== null) {
-      addIssue(issues, 'COM-06a', 'WARN', `メソッド名が大文字: .${m[1]}`, location, '', `→ .${m[1].toLowerCase()}`);
+      addIssue(issues, 'COM-06a', 'WARN', `メソッドに大文字が含まれています: .${m[1]}`, location, '', `→ .${m[1].toLowerCase()}`);
     }
 
     // COM-06b: ラベルは大文字（!の後の識別子）
@@ -293,7 +292,7 @@ function checkCOM06(root, issues) {
       // @CUR, @POV は除外（COM-06fで扱う）
       if (label.startsWith('@')) continue;
       if (label !== label.toUpperCase()) {
-        addIssue(issues, 'COM-06b', 'WARN', `ラベルが小文字を含む: ${label}`, location, '', `→ ${label.toUpperCase()}`);
+        addIssue(issues, 'COM-06b', 'WARN', `ラベルに小文字が含まれています: ${label}`, location, '', `→ ${label.toUpperCase()}`);
       }
     }
 
@@ -315,7 +314,7 @@ function checkCOM06(root, issues) {
         } else {
           reason = `値が "${value}" です（"TRUE" または "FALSE" が必要 — タイポの可能性）`;
         }
-        addIssue(issues, 'COM-06c', 'ERROR', `#LEAF の値が正しくありません`, location, fullMatch, reason);
+        addIssue(issues, 'COM-06c', 'ERROR', `#LEAFの値が正しくありません`, location, fullMatch, reason);
       }
     }
 
@@ -327,7 +326,7 @@ function checkCOM06(root, issues) {
       const wordRe = new RegExp('\\b(' + word + ')\\b', 'g');
       while ((m = wordRe.exec(noStrings)) !== null) {
         if (m[1] !== m[1].toLowerCase()) {
-          addIssue(issues, 'COM-06d', 'WARN', `予約語が大文字: ${m[1]}`, location, '', `→ ${m[1].toLowerCase()}`);
+          addIssue(issues, 'COM-06d', 'WARN', `予約語に大文字が含まれています: ${m[1]}`, location, '', `→ ${m[1].toLowerCase()}`);
         }
       }
     }
@@ -336,14 +335,14 @@ function checkCOM06(root, issues) {
     const funcRe = /@([A-Z][a-zA-Z0-9_]*)/g;
     while ((m = funcRe.exec(activeText)) !== null) {
       if (['CUR', 'POV', 'RKEY'].includes(m[1])) continue;
-      addIssue(issues, 'COM-06e', 'WARN', `関数が大文字: @${m[1]}`, location, '', `→ @${m[1].toLowerCase()}`);
+      addIssue(issues, 'COM-06e', 'WARN', `関数に大文字が含まれています: @${m[1]}`, location, '', `→ @${m[1].toLowerCase()}`);
     }
 
     // COM-06f: 疑似ラベルは大文字（@CUR, @POV, @RKEY）
     const pseudoRe = /@(cur|pov|rkey)/gi;
     while ((m = pseudoRe.exec(activeText)) !== null) {
       if (m[1] !== m[1].toUpperCase()) {
-        addIssue(issues, 'COM-06f', 'WARN', `疑似ラベルが小文字: @${m[1]}`, location, '', `→ @${m[1].toUpperCase()}`);
+        addIssue(issues, 'COM-06f', 'WARN', `疑似メンバラベルに小文字が含まれています: @${m[1]}`, location, '', `→ @${m[1].toUpperCase()}`);
       }
     }
   }
@@ -451,7 +450,7 @@ function checkCOM08(root, issues) {
   if (!rf) return;
   const prot = rf.querySelector('protected');
   if (prot && prot.textContent === 'true') {
-    addIssue(issues, 'COM-08', 'INFO', '帳票書式の「セルを保護」が有効です', '');
+    addIssue(issues, 'COM-08', 'WARN', '帳票書式の「セルを保護」が有効です', '');
   }
 }
 
@@ -490,6 +489,7 @@ function checkCOM10(root, issues) {
     const axisEl = root.querySelector(axis.tag);
     if (!axisEl) continue;
     const specs = findRecursive(axisEl, 'column-row-spec');
+    if (specs.length <= 1) continue;
     specs.forEach((spec, i) => {
       const label = spec.getAttribute('label') || '';
       const nameEl = spec.querySelector(':scope > name');
@@ -498,7 +498,7 @@ function checkCOM10(root, issues) {
       if (!label && !parsed.en && !parsed.ja) {
         const loc = crsLocation(spec, i + 1, axis.label);
         addIssue(issues, 'COM-10', 'INFO',
-          `label と name がともにブランクです`,
+          `ラベルも名前も設定されていません`,
           loc,
           'スペーサー行等の可能性があります');
       }
@@ -572,7 +572,7 @@ function checkREF02(root, issues) {
     const prohibited = loop.getAttribute('item-addition-prohibited');
     if (prohibited !== 'true') {
       const dim = loopDimLabel(loop);
-      addIssue(issues, 'REF-02', 'WARN',
+      addIssue(issues, 'REF-02', 'INFO',
         `ループ項目選択行が非表示に設定されていません`,
         `行軸 › ループ（${dim}）`,
         `item-addition-prohibited="${prohibited || '未設定'}"`);
@@ -588,7 +588,7 @@ function checkREF03(root, issues) {
   // タグが存在しない場合はデフォルト値 LOOP_HEADERS
   // タグが存在して値が LOOP_HEADERS の場合も同様
   if (!rwll || rwll.textContent === 'LOOP_HEADERS') {
-    addIssue(issues, 'REF-03', 'WARN',
+    addIssue(issues, 'REF-03', 'INFO',
       '帳票書式の行表示設定が LOOP_HEADERS になっています',
       '', '参照用フォームでは FIRST_DETAILS が一般的です');
   }
@@ -657,7 +657,7 @@ function checkDrillDown(dd, location, issues) {
   const condText = condition && condition.textContent ? condition.textContent.trim() : '';
   if (!condText) {
     addIssue(issues, 'REF-04', 'WARN',
-      'ドリルダウンが有効ですがconditionが空です',
+      'ドリルダウン時の条件設定が空です',
       location, 'ドリルダウンの実行条件が未設定です');
   }
 }
@@ -670,12 +670,12 @@ function checkDrillDown(dd, location, issues) {
 function checkIMP01(root, issues) {
   const imp = root.querySelector(':scope > import-spec');
   if (!imp) {
-    addIssue(issues, 'IMP-01', 'WARN', 'import-specが存在しません', '');
+    addIssue(issues, 'IMP-01', 'ERROR', 'import-specが存在しません', '');
     return;
   }
   const enabled = imp.querySelector('enabled');
   if (!enabled || enabled.textContent !== 'true') {
-    addIssue(issues, 'IMP-01', 'WARN', 'インポート仕様が無効です', '', `enabled="${enabled ? enabled.textContent : '未設定'}"`);
+    addIssue(issues, 'IMP-01', 'ERROR', 'インポート仕様が無効です', '', `enabled="${enabled ? enabled.textContent : '未設定'}"`);
   }
 }
 
@@ -708,7 +708,7 @@ function checkIMP03(root, issues) {
 function checkEXP01(root, issues) {
   const exp = root.querySelector(':scope > export-spec');
   if (!exp) {
-    addIssue(issues, 'EXP-01', 'ERROR', 'export-specが存在しません', '');
+    addIssue(issues, 'EXP-01', 'ERROR', 'エクスポート仕様が無効です', '');
     return;
   }
   const enabled = exp.querySelector('enabled');
@@ -762,13 +762,13 @@ function checkPIP01(root, issues) {
       addIssue(issues, 'PIP-01', 'ERROR',
         'ループのtitleが未設定です',
         `行軸 › ループ（${dim}）`,
-        'パイプラインOUTでは ディメンションラベル!@CUR.label 形式が必要です');
+        'インポート先でもディメンションとして扱う場合は、.labelで出力しないとエラーになります');
     } else if (!titleText.includes('.label')) {
       addIssue(issues, 'PIP-01', 'ERROR',
         `ループの表示仕様が .label ではありません`,
         `行軸 › ループ（${dim}）`,
         titleText.substring(0, 80),
-        '→ .label 形式に変更してください');
+        'インポート先でもディメンションとして扱う場合は、.labelで出力しないとエラーになります');
     }
   }
 }
@@ -804,25 +804,25 @@ function renderResults(issues) {
 
   const checkNames = {
     'COM-01': 'デフォルトタイトル残存',
-    'COM-02': 'peg/expansion 組み合わせ',
+    'COM-02': '起点メンバと展開方法の組み合わせ',
     'COM-03': '元帳マスク設定',
     'COM-04': 'トリガー設定',
-    'COM-05': 'エクスポート行ループ項目',
-    'COM-06a': 'テキスト式: メソッド名',
-    'COM-06b': 'テキスト式: ラベル',
-    'COM-06c': 'テキスト式: #LEAF値',
-    'COM-06d': 'テキスト式: 予約語',
-    'COM-06e': 'テキスト式: 関数名',
-    'COM-06f': 'テキスト式: 疑似ラベル',
+    'COM-05': 'エクスポートの行ループ項目出力設定',
+    'COM-06a': '記述ルール: メソッドはすべて小文字',
+    'COM-06b': '記述ルール: ラベルはすべて大文字',
+    'COM-06c': '記述ルール: #LEAFの値は"TRUE"/"FALSE"',
+    'COM-06d': '記述ルール: 予約語（if, then, and 等）はすべて小文字',
+    'COM-06e': '記述ルール: 関数はすべて小文字',
+    'COM-06f': '記述ルール: 疑似メンバラベル（@POV等）はすべて大文字',
     'COM-07': 'フォームラベルのハイフン',
     'COM-08': 'セルを保護',
-    'COM-09': 'ループインデント幅',
-    'COM-10': 'label・name ブランク',
+    'COM-09': 'ループインデント幅設定が無効',
+    'COM-10': '列/行仕様のラベル・名称設定',
     'COM-11': '数値のみのラベル',
     'REF-01': 'タイトル未設定',
-    'REF-02': 'ループ項目選択行の非表示',
-    'REF-03': '行表示設定 LOOP_HEADERS',
-    'REF-04': 'ドリルダウンcondition空',
+    'REF-02': 'ループ項目選択行の表示設定',
+    'REF-03': '帳票書式 ループヘッダ表示設定',
+    'REF-04': 'ドリルダウン条件未設定',
     'IMP-01': 'インポート仕様が無効',
     'IMP-02': '符号表示タイプ',
     'IMP-03': 'ヘッダ読み飛ばし行数',
@@ -991,25 +991,97 @@ function autoFixAndRecheck() {
 async function exportText() {
   if (!lastResults.length && !resolvedIssues.length) return;
 
+  // フォーム情報をXMLから取得
+  let formId = '';
+  let formNameJa = '';
+  let formNameEn = '';
+  try {
+    const doc = parseXML(xmlInput.value);
+    const root = doc.documentElement;
+    formId = root.getAttribute('label') || '';
+    const nameEl = root.querySelector(':scope > name');
+    if (nameEl && nameEl.textContent) {
+      const parsed = parseName(nameEl.textContent);
+      formNameJa = parsed.ja;
+      formNameEn = parsed.en;
+    }
+  } catch (e) {}
+
+  // レビュー日時
+  const now = new Date();
+  const dt = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+
   const formatIssue = i =>
-    `[${i.severity}] ${i.code}: ${i.message}${i.location ? ' @ ' + i.location : ''}${i.suggest ? ' ' + i.suggest : ''}`;
+    `${i.code}: ${i.message}${i.location ? ' @ ' + i.location : ''}${i.suggest ? ' ' + i.suggest : ''}`;
+
+  function formatAll(issues) {
+    return issues.map(formatIssue).join('\n');
+  }
+
+  /** コード単位でグルーピング（自動修正解消セクション用） */
+  function formatGrouped(issues) {
+    const groups = {};
+    const order = [];
+    for (const iss of issues) {
+      if (!groups[iss.code]) { groups[iss.code] = []; order.push(iss.code); }
+      groups[iss.code].push(iss);
+    }
+    const lines = [];
+    for (const code of order) {
+      const items = groups[code];
+      const first = items[0];
+      let line = `${first.code}: ${first.message}${first.suggest ? ' ' + first.suggest : ''}`;
+      lines.push(items.length > 1 ? `${line} （ほか全${items.length}件）` : line);
+    }
+    return lines.join('\n');
+  }
+
+  /** severity 別にセクション出力 */
+  function formatBySeverity(issues) {
+    const errors = issues.filter(i => i.severity === 'ERROR');
+    const warns  = issues.filter(i => i.severity === 'WARN');
+    const infos  = issues.filter(i => i.severity === 'INFO');
+    const sections = [];
+    if (errors.length) sections.push(`----- Error (${errors.length}件) -----\n${formatAll(errors)}`);
+    if (warns.length)  sections.push(`----- Warning (${warns.length}件) -----\n${formatAll(warns)}`);
+    if (infos.length)  sections.push(`----- Information (${infos.length}件) -----\n${formatAll(infos)}`);
+    return sections.join('\n\n');
+  }
 
   let text = '';
 
-  // 自動修正で解消されたアイテム
-  if (resolvedIssues.length > 0) {
-    text += `=== 自動修正で解消 (${resolvedIssues.length}件) ===\n`;
-    text += resolvedIssues.map(formatIssue).join('\n');
-    text += '\n\n';
+  // ヘッダー
+  text += `フォームID：${formId}\n`;
+  text += `フォーム名(ja)：${formNameJa}\n`;
+  text += `フォーム名(en)：${formNameEn}\n`;
+  text += `レビュー日時：${dt}\n`;
+  text += '\n------------------------------\nレビュー結果\n------------------------------\n';
+
+  // カテゴリ定義
+  const pattern = document.querySelector('input[name="pattern"]:checked').value;
+  const categories = [
+    { key: 'COM', label: '共通チェック', prefixes: ['COM-'] },
+  ];
+  if (pattern === 'ref')      categories.push({ key: 'REF', label: '参照用フォームとしてのチェック',       prefixes: ['REF-'] });
+  if (pattern === 'import')   categories.push({ key: 'IMP', label: 'インポートフォームとしてのチェック',   prefixes: ['IMP-'] });
+  if (pattern === 'export')   categories.push({ key: 'EXP', label: 'エクスポートフォームとしてのチェック', prefixes: ['EXP-'] });
+  if (pattern === 'pipeline') {
+    categories.push({ key: 'EXP', label: 'エクスポートフォームとしてのチェック',       prefixes: ['EXP-'] });
+    categories.push({ key: 'PIP', label: 'パイプライン出力フォームとしてのチェック',   prefixes: ['PIP-'] });
   }
 
-  // 残存する指摘
-  if (lastResults.length > 0) {
-    const label = resolvedIssues.length > 0 ? '残存する指摘' : 'チェック結果';
-    text += `=== ${label} (${lastResults.length}件) ===\n`;
-    text += lastResults.map(formatIssue).join('\n');
-  } else if (resolvedIssues.length > 0) {
-    text += '=== 残存する指摘 (0件) ===\n✓ すべて解消されました';
+  // カテゴリ別出力（指摘なしのカテゴリも表示）
+  for (const cat of categories) {
+    const catIssues = lastResults.filter(i => cat.prefixes.some(p => i.code.startsWith(p)));
+    text += `\n${cat.label}\n`;
+    text += catIssues.length > 0 ? formatBySeverity(catIssues) : '指摘なし';
+    text += '\n';
+  }
+
+  // 自動修正で解消されたアイテム（末尾に参考として配置）
+  if (resolvedIssues.length > 0) {
+    text += `\n----- 自動修正で解消 (${resolvedIssues.length}件) -----\n`;
+    text += formatGrouped(resolvedIssues);
   }
 
   try {
