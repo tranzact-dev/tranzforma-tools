@@ -47,9 +47,10 @@ function loadAPD(xmlText) {
   const doc = parser.parseFromString(xmlText, 'application/xml');
   if (doc.querySelector('parsererror')) throw new Error('XMLの構文が正しくありません');
   return {
-    forms:   parseForms(doc),
+    forms:      parseForms(doc),
     ...parseLedgers(doc),
-    scripts: parseScripts(doc),
+    transTables: parseTransTables(doc),
+    scripts:    parseScripts(doc),
   };
 }
 
@@ -175,6 +176,52 @@ function parseLedgers(doc) {
   return { ledgers, dims: [...allDims].sort() };
 }
 
+// ─── 変換表 ────────────────────────────────────────────────────────
+function parseTransTables(doc) {
+  const appEntry = [...doc.querySelectorAll('entries > entry')]
+    .find(e => e.getAttribute('type') === 'APPLICATION')
+    || doc.querySelector('entries > entry');
+
+  const topElems = appEntry?.querySelector(':scope > elements');
+  if (!topElems) return [];
+
+  const tablesContainer = [...topElems.children]
+    .find(e => e.getAttribute('type') === 'TRANSLATION_TABLES');
+  if (!tablesContainer) return [];
+
+  const tablesElems = tablesContainer.querySelector(':scope > elements');
+  if (!tablesElems) return [];
+
+  return [...tablesElems.children]
+    .filter(e => e.getAttribute('type') === 'TRANSLATION_TABLE')
+    .map(node => {
+      const label = node.getAttribute('label') || '';
+      const elems = node.querySelector(':scope > elements');
+      if (!elems) return { label, nameJa: '', nameEn: '', customizable: '', rules: [] };
+
+      const nameEl = [...elems.children].find(e => e.getAttribute('type') === 'NAME');
+      const nm     = parseName(nameEl?.querySelector('content')?.textContent || '');
+
+      const customizable = [...elems.children].find(e => e.getAttribute('type') === 'CUSTOMIZABLE')
+        ?.querySelector('content')?.textContent || '';
+
+      const rulesContainer = [...elems.children].find(e => e.getAttribute('type') === 'TRANSLATION_RULES');
+      const rulesElems     = rulesContainer?.querySelector(':scope > elements');
+      const rules = rulesElems
+        ? [...rulesElems.children]
+            .filter(e => e.getAttribute('type') === 'TRANSLATION_RULE')
+            .map(r => {
+              const re = r.querySelector(':scope > elements');
+              const pre  = re ? [...re.children].find(e => e.getAttribute('type') === 'PRE')?.querySelector('content')?.textContent  || '' : '';
+              const post = re ? [...re.children].find(e => e.getAttribute('type') === 'POST')?.querySelector('content')?.textContent || '' : '';
+              return { pre, post };
+            })
+        : [];
+
+      return { label, nameJa: nm.ja, nameEn: nm.en, customizable, rules };
+    });
+}
+
 // ─── スクリプト ────────────────────────────────────────────────────
 function parseScripts(doc) {
   const appEntry = [...doc.querySelectorAll('entries > entry')]
@@ -218,9 +265,9 @@ function onApdLoaded(side, text, fileName) {
     const dropEl = document.getElementById(`drop${side}`);
     dropEl.classList.add('loaded');
     dropEl.querySelector('.drop-filename').textContent =
-      `${fileName} (フォーム:${data.forms.length} / 台帳:${data.ledgers.length} / スクリプト:${data.scripts.length})`;
+      `${fileName} (フォーム:${data.forms.length} / 台帳:${data.ledgers.length} / 変換表:${data.transTables.length} / スクリプト:${data.scripts.length})`;
 
-    ['list', 'ledger', 'script'].forEach(t =>
+    ['list', 'ledger', 'trans', 'script'].forEach(t =>
       document.getElementById(`${t}Btn${side}`).disabled = false
     );
     document.getElementById('compareBtn').disabled = !(apdA && apdB);
@@ -242,15 +289,17 @@ setupDrop('dropB', 'fileB', (t, f) => onApdLoaded('B', t, f));
 // ═══════════════════════════════════════════════════════════════════
 // Result visibility
 // ═══════════════════════════════════════════════════════════════════
+const RESULT_TYPES = ['list', 'ledger', 'trans', 'script', 'compare'];
+
 function showResult(type) {
-  ['list', 'ledger', 'script', 'compare'].forEach(t =>
+  RESULT_TYPES.forEach(t =>
     document.getElementById(`${t}Result`).style.display = t === type ? '' : 'none'
   );
   document.getElementById('resultArea').style.display = '';
 }
 
 function hideAllResults() {
-  ['list', 'ledger', 'script', 'compare'].forEach(t =>
+  RESULT_TYPES.forEach(t =>
     document.getElementById(`${t}Result`).style.display = 'none'
   );
   document.getElementById('resultArea').style.display = 'none';
@@ -268,19 +317,12 @@ function renderListResult(side) {
   document.getElementById('listSummary').textContent =
     `[APD-${side}] ${apd.fileName} — ${apd.forms.length}件`;
 
-  document.getElementById('listTbody').innerHTML = apd.forms.map(f => `
-    <tr>
-      <td class="label-cell">${esc(f.flLabel)}</td>
-      <td>${esc(f.flName)}</td>
-      <td class="label-cell">${esc(f.formLabel)}</td>
-      <td>${esc(f.formNameJa)}</td>
-      <td>${esc(f.formNameEn)}</td>
-      <td class="${f.import      ? 'on' : ''}">${esc(f.import)}</td>
-      <td class="${f.export      ? 'on' : ''}">${esc(f.export)}</td>
-      <td class="${f.reflectCalc ? 'on' : ''}">${esc(f.reflectCalc)}</td>
-      <td class="params">${esc(f.parameters)}</td>
-      <td class="params">${esc(f.triggers)}</td>
-    </tr>`).join('');
+  // 検索状態リセット
+  document.getElementById('listSearchInput').value = '';
+  document.getElementById('clearFilterBtn').style.display = 'none';
+  document.getElementById('filterSummary').textContent = '';
+
+  renderFormRows(apd.forms);
 }
 
 async function downloadFormZip() {
@@ -300,6 +342,45 @@ async function downloadFormZip() {
   a.href = url; a.download = `forms_APD-${activeResult.side}_${dateStr}.zip`;
   a.click(); URL.revokeObjectURL(url);
   showToast(`${apd.forms.length}件のフォームをダウンロードしました`);
+}
+
+function renderFormRows(forms) {
+  document.getElementById('listTbody').innerHTML = forms.map(f => `
+    <tr>
+      <td class="label-cell">${esc(f.flLabel)}</td>
+      <td>${esc(f.flName)}</td>
+      <td class="label-cell">${esc(f.formLabel)}</td>
+      <td>${esc(f.formNameJa)}</td>
+      <td>${esc(f.formNameEn)}</td>
+      <td class="${f.import      ? 'on' : ''}">${esc(f.import)}</td>
+      <td class="${f.export      ? 'on' : ''}">${esc(f.export)}</td>
+      <td class="${f.reflectCalc ? 'on' : ''}">${esc(f.reflectCalc)}</td>
+      <td class="params">${esc(f.parameters)}</td>
+      <td class="params">${esc(f.triggers)}</td>
+    </tr>`).join('');
+}
+
+function filterList() {
+  const query = document.getElementById('listSearchInput').value.trim();
+  if (!query) { clearListFilter(); return; }
+
+  const apd = activeResult?.side === 'A' ? apdA : apdB;
+  if (!apd) return;
+
+  const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  const filtered = apd.forms.filter(f => f.xml && re.test(f.xml));
+
+  document.getElementById('clearFilterBtn').style.display = '';
+  document.getElementById('filterSummary').textContent = `${filtered.length} / ${apd.forms.length}件`;
+  renderFormRows(filtered);
+}
+
+function clearListFilter() {
+  document.getElementById('listSearchInput').value = '';
+  document.getElementById('clearFilterBtn').style.display = 'none';
+  document.getElementById('filterSummary').textContent = '';
+  const apd = activeResult?.side === 'A' ? apdA : apdB;
+  if (apd) renderFormRows(apd.forms);
 }
 
 function copyListTSV() {
@@ -351,6 +432,71 @@ function copyLedgerTSV() {
     [dim, ...ledgers.map(l => l.dims.includes(dim) ? '1' : '')].join('\t')
   );
   copyText([row1, row2, ...rows].join('\r\n'), '元帳設定TSVをコピーしました');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 変換表
+// ═══════════════════════════════════════════════════════════════════
+function renderTransResult(side) {
+  const apd = side === 'A' ? apdA : apdB;
+  if (!apd) return;
+  activeResult = { type: 'trans', side };
+  showResult('trans');
+
+  document.getElementById('transSummary').textContent =
+    `[APD-${side}] ${apd.fileName} — ${apd.transTables.length}件`;
+
+  document.getElementById('transTbody').innerHTML = apd.transTables.map(t => `
+    <tr>
+      <td class="label-cell">${esc(t.label)}</td>
+      <td>${esc(t.nameJa)}</td>
+      <td>${esc(t.nameEn)}</td>
+      <td style="text-align:center">${t.customizable === 'true' ? '●' : ''}</td>
+      <td style="text-align:center">${t.rules.length}</td>
+    </tr>`).join('');
+}
+
+function copyTransTSV() {
+  const apd = activeResult?.side === 'A' ? apdA : apdB;
+  if (!apd) return;
+  const header = 'LABEL\tNAME_JA\tNAME_EN\tCUSTOMIZABLE\tRULE_COUNT';
+  const rows   = apd.transTables.map(t =>
+    [t.label, t.nameJa, t.nameEn, t.customizable, t.rules.length].join('\t')
+  );
+  copyText([header, ...rows].join('\r\n'), '変換表一覧TSVをコピーしました');
+}
+
+function escCsv(v) {
+  const s = String(v || '');
+  return s.match(/[,"\r\n]/) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+async function downloadTransZip(fmt) {
+  const apd = activeResult?.side === 'A' ? apdA : apdB;
+  if (!apd || !apd.transTables.length) { showToast('変換表がありません', 'error'); return; }
+  if (typeof JSZip === 'undefined') {
+    showToast('JSZipが読み込めません。インターネット接続を確認してください。', 'error'); return;
+  }
+  const sep = fmt === 'tsv' ? '\t' : ',';
+  const ext = fmt === 'tsv' ? 'tsv' : 'csv';
+  const esc = fmt === 'tsv' ? (v => String(v || '')) : escCsv;
+
+  const zip = new JSZip();
+  for (const t of apd.transTables) {
+    const lines = [
+      `CLEAR-TRANSLATION-TABLE${sep}${sep}${sep}`,
+      `ADD-TRANSLATION-RULE${sep}HDR${sep}CODE_TO_TRANSLATE${sep}TRANSLATED_CODE`,
+      ...t.rules.map(r => `ADD-TRANSLATION-RULE${sep}DTL${sep}${esc(r.pre)}${sep}${esc(r.post)}`),
+    ];
+    zip.file(`TransTable_${t.label}.${ext}`, lines.join('\r\n'));
+  }
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const blob    = await zip.generateAsync({ type: 'blob' });
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement('a');
+  a.href = url; a.download = `transtables_APD-${activeResult.side}_${dateStr}_${fmt}.zip`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast(`${apd.transTables.length}件の変換表をダウンロードしました (${fmt.toUpperCase()})`);
 }
 
 // ═══════════════════════════════════════════════════════════════════

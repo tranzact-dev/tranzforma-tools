@@ -29,8 +29,9 @@
       </div>
       <div class="slot-actions">
         <button class="btn btn-secondary" id="listBtnA"   onclick="renderListResult('A')"   disabled>📋 フォーム一覧</button>
-        <button class="btn btn-secondary" id="ledgerBtnA" onclick="renderLedgerResult('A')" disabled>📒 元帳設定</button>
-        <button class="btn btn-secondary" id="scriptBtnA" onclick="renderScriptResult('A')" disabled>📜 スクリプト</button>
+        <button class="btn btn-secondary" id="ledgerBtnA"  onclick="renderLedgerResult('A')"  disabled>📒 元帳設定</button>
+        <button class="btn btn-secondary" id="transBtnA"   onclick="renderTransResult('A')"   disabled>🔄 変換表</button>
+        <button class="btn btn-secondary" id="scriptBtnA"  onclick="renderScriptResult('A')"  disabled>📜 スクリプト</button>
       </div>
     </div>
     <div class="apd-slot">
@@ -43,8 +44,9 @@
       </div>
       <div class="slot-actions">
         <button class="btn btn-secondary" id="listBtnB"   onclick="renderListResult('B')"   disabled>📋 フォーム一覧</button>
-        <button class="btn btn-secondary" id="ledgerBtnB" onclick="renderLedgerResult('B')" disabled>📒 元帳設定</button>
-        <button class="btn btn-secondary" id="scriptBtnB" onclick="renderScriptResult('B')" disabled>📜 スクリプト</button>
+        <button class="btn btn-secondary" id="ledgerBtnB"  onclick="renderLedgerResult('B')"  disabled>📒 元帳設定</button>
+        <button class="btn btn-secondary" id="transBtnB"   onclick="renderTransResult('B')"   disabled>🔄 変換表</button>
+        <button class="btn btn-secondary" id="scriptBtnB"  onclick="renderScriptResult('B')"  disabled>📜 スクリプト</button>
       </div>
     </div>
   </div>
@@ -62,6 +64,13 @@
         <span id="listSummary" class="result-label"></span>
         <button class="btn btn-fix" onclick="copyListTSV()">📋 TSVをコピー</button>
         <button class="btn btn-fix" onclick="downloadFormZip()">⬇ フォームZIP</button>
+      </div>
+      <div class="list-search-bar">
+        <input type="text" id="listSearchInput" class="search-input" placeholder="XMLを検索…"
+               onkeydown="if(event.key==='Enter')filterList(); if(event.key==='Escape')clearListFilter()">
+        <button class="btn btn-secondary" onclick="filterList()">🔍 検索</button>
+        <button class="btn btn-secondary" id="clearFilterBtn" onclick="clearListFilter()" style="display:none">✕ クリア</button>
+        <span id="filterSummary" class="result-label"></span>
       </div>
       <div class="table-wrap">
         <table id="listTable">
@@ -94,6 +103,30 @@
         <table id="ledgerTable">
           <thead id="ledgerThead"></thead>
           <tbody id="ledgerTbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 変換表 -->
+    <div id="transResult" style="display:none">
+      <div class="action-row">
+        <span id="transSummary" class="result-label"></span>
+        <button class="btn btn-fix" onclick="copyTransTSV()">📋 TSVをコピー</button>
+        <button class="btn btn-fix" onclick="downloadTransZip('csv')">⬇ ZIP (CSV)</button>
+        <button class="btn btn-fix" onclick="downloadTransZip('tsv')">⬇ ZIP (TSV)</button>
+      </div>
+      <div class="table-wrap">
+        <table id="transTable">
+          <thead>
+            <tr>
+              <th>ラベル</th>
+              <th>名称 JA</th>
+              <th>名称 EN</th>
+              <th>カスタマイズ可</th>
+              <th>ルール数</th>
+            </tr>
+          </thead>
+          <tbody id="transTbody"></tbody>
         </table>
       </div>
     </div>

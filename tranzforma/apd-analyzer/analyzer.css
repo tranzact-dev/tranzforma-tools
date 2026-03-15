@@ -39,6 +39,20 @@ body { justify-content: flex-start; }
 .apd-drop .drop-filename { font: 500 12px var(--mono); }
 .apd-drop input[type="file"] { display: none; }
 
+/* ─── List search bar ─── */
+.list-search-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 0;
+}
+.search-input {
+  flex: 1; min-width: 160px;
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font: 400 13px var(--mono); padding: 6px 10px;
+  outline: none; transition: border-color 0.15s;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-input::placeholder { color: var(--text3); }
+
 /* ─── Action rows ─── */
 .action-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .compare-row { display: flex; justify-content: center; }
