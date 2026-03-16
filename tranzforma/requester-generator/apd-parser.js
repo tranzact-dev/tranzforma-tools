@@ -97,10 +97,13 @@ function parseAPD(xml) {
   }
 
   // ── TRANSLATION_TABLE list ───────────────────────────────────────────
-  // Direct children of APPLICATION elements (no container)
-  for (const tt of childEntries(appEntry, 'TRANSLATION_TABLE')) {
-    const label = tt.getAttribute('label');
-    if (label) result.translationTables.push(label);
+  // Path: TRANSLATION_TABLES > TRANSLATION_TABLE
+  const ttListEntry = childEntries(appEntry, 'TRANSLATION_TABLES')[0];
+  if (ttListEntry) {
+    for (const tt of childEntries(ttListEntry, 'TRANSLATION_TABLE')) {
+      const label = tt.getAttribute('label');
+      if (label) result.translationTables.push(label);
+    }
   }
 
   // ── FISCAL_YEAR list ─────────────────────────────────────────────────
@@ -126,15 +129,13 @@ function parseAPD(xml) {
     }
   }
 
-  // ── SCENARIO members (encoded inner XML) ─────────────────────────────
+  // ── SCENARIO members ─────────────────────────────────────────────────
+  // Path: SCENARIO_TABLE > SCENARIO (same pattern as FISCAL_YEAR_TABLE > FISCAL_YEAR)
   const scenarioTableEntry = childEntries(appEntry, 'SCENARIO_TABLE')[0];
   if (scenarioTableEntry) {
-    const inner = parseInnerXml(scenarioTableEntry);
-    if (inner) {
-      for (const s of inner.querySelectorAll('scenario')) {
-        const label = s.getAttribute('label');
-        if (label) result.scenarioMembers.push(label);
-      }
+    for (const s of childEntries(scenarioTableEntry, 'SCENARIO')) {
+      const label = s.getAttribute('label');
+      if (label) result.scenarioMembers.push(label);
     }
   }
 

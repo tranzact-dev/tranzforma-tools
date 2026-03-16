@@ -8,6 +8,28 @@ function genEnvBat(c) {
   return `@echo off\r\nset URL=${url}\r\nset USER=admin\r\nset PW=admin\r\nset APL=${apl}\r\n`;
 }
 
+/**
+ * Generate <contents> block for each request type.
+ * Edit this function to change contents per request type.
+ */
+function genContents(reqType) {
+  switch (reqType) {
+    case 'EXPORT_VALUES':
+      return `    <contents>\n      returned-contents-file=csv/output.csv\n    </contents>\n`;
+    case 'IMPORT_VALUES':
+      return `    <contents>\n      request-contents-file=src/input.csv\n      returned-contents-file=logs/imp_log.csv\n    </contents>\n`;
+    case 'UPDATE_DIMENSION':
+    case 'IMPORT_TRANSLATION_TABLE':
+      return `    <contents>\n      request-contents-file=src/input.csv\n    </contents>\n`;
+    case 'CALCULATE_BY_FORM':
+    case 'EXPORT_DIMENSION':
+    case 'RUN_SCRIPT':
+    case 'BACKUP_APPLICATION':
+    default:
+      return `    <contents></contents>\n`;
+  }
+}
+
 function genRequestXml(c) {
   const apl = '%APL%';
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<requests>\n`;
@@ -29,7 +51,7 @@ function genRequestXml(c) {
     xml += `      <parameter name="NEWLINE_STYLE" value="crlf"/>\n`;
     xml += `      <parameter name="QUOTE_STYLE" value="always"/>\n`;
     xml += `    </parameters>\n`;
-    xml += `    <contents>\n      returned-contents-file=csv/output.csv\n    </contents>\n`;
+    xml += genContents(c.reqType);
     xml += `  </request>\n`;
 
   } else if (c.reqType === 'IMPORT_VALUES') {
@@ -42,8 +64,13 @@ function genRequestXml(c) {
       const varName = pov.dim.replace(/^#/, '');
       xml += `      <parameter name="POV" key="${pov.dim}" value="%${varName}%"/>\n`;
     }
+    xml += `      <parameter name="FORMAT" value="${c.importFormat || 'csv'}"/>\n`;
+    xml += `      <parameter name="NEWLINE_STYLE" value="${c.importNewline || 'lf'}"/>\n`;
+    if ((c.importSeverity || 'INFO') !== 'ALL') {
+      xml += `      <parameter name="MIN_SEVERITY" value="${c.importSeverity}"/>\n`;
+    }
     xml += `    </parameters>\n`;
-    xml += `    <contents>\n      source-file=src/input.csv\n    </contents>\n`;
+    xml += genContents(c.reqType);
     xml += `  </request>\n`;
 
   } else if (c.reqType === 'CALCULATE_BY_FORM') {
@@ -58,7 +85,7 @@ function genRequestXml(c) {
     }
     xml += `      <!-- TODO: Add more POV parameters as needed -->\n`;
     xml += `    </parameters>\n`;
-    xml += `    <contents></contents>\n`;
+    xml += genContents(c.reqType);
     xml += `  </request>\n`;
 
   } else if (c.reqType === 'UPDATE_DIMENSION') {
@@ -68,7 +95,7 @@ function genRequestXml(c) {
     xml += `      <parameter name="DIMENSION" value="${c.pDimension || 'DIM_LABEL'}"/>\n`;
     xml += `      <parameter name="ROLE" value="${c.pDimRole}"/>\n`;
     xml += `    </parameters>\n`;
-    xml += `    <contents>\n      source-file=src/input.csv\n    </contents>\n`;
+    xml += genContents(c.reqType);
     xml += `  </request>\n`;
 
   } else if (c.reqType === 'EXPORT_DIMENSION') {
@@ -77,7 +104,7 @@ function genRequestXml(c) {
     xml += `      <parameter name="APPLICATION" value="${apl}"/>\n`;
     xml += `      <parameter name="DIMENSION" value="${c.pDimension || 'DIM_LABEL'}"/>\n`;
     xml += `    </parameters>\n`;
-    xml += `    <contents></contents>\n`;
+    xml += genContents(c.reqType);
     xml += `  </request>\n`;
 
   } else if (c.reqType === 'IMPORT_TRANSLATION_TABLE') {
@@ -86,7 +113,7 @@ function genRequestXml(c) {
     xml += `      <parameter name="APPLICATION" value="${apl}"/>\n`;
     xml += `      <!-- TODO: Add TABLE and other parameters as needed -->\n`;
     xml += `    </parameters>\n`;
-    xml += `    <contents>\n      source-file=src/input.csv\n    </contents>\n`;
+    xml += genContents(c.reqType);
     xml += `  </request>\n`;
 
   } else if (c.reqType === 'RUN_SCRIPT') {
@@ -100,7 +127,7 @@ function genRequestXml(c) {
     }
     xml += `      <!-- TODO: Add more POV parameters as needed -->\n`;
     xml += `    </parameters>\n`;
-    xml += `    <contents></contents>\n`;
+    xml += genContents(c.reqType);
     xml += `  </request>\n`;
 
   } else if (c.reqType === 'BACKUP_APPLICATION') {
@@ -108,7 +135,7 @@ function genRequestXml(c) {
     xml += `    <parameters>\n`;
     xml += `      <parameter name="APPLICATION" value="${apl}"/>\n`;
     xml += `    </parameters>\n`;
-    xml += `    <contents></contents>\n`;
+    xml += genContents(c.reqType);
     xml += `  </request>\n`;
   }
 
@@ -133,6 +160,24 @@ function genRunBat(c) {
 
   // Connection info (always env.bat in this version)
   b += `Call ..\\env.bat\r\n\r\n`;
+
+  // Confirmation (interactive mode only)
+  if (isInteractive) {
+    b += `rem --- Confirm settings ---\r\n`;
+    b += `echo.\r\n`;
+    b += `echo ========================================\r\n`;
+    b += `echo   URL  : %URL%\r\n`;
+    b += `echo   USER : %USER%\r\n`;
+    b += `echo   APL  : %APL%\r\n`;
+    b += `echo ========================================\r\n`;
+    b += `set /p CONFIRM=Run with these settings? [y/n]: \r\n`;
+    b += `if /i not "%CONFIRM%"=="y" (\r\n`;
+    b += `  echo Cancelled.\r\n`;
+    b += `  pause\r\n`;
+    b += `  exit /b 0\r\n`;
+    b += `)\r\n`;
+    b += `echo.\r\n\r\n`;
+  }
 
   // IMPORT_VALUES: pre-run source file check + POV variable setup
   if (isImportValues) {

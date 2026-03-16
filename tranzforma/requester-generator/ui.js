@@ -48,10 +48,10 @@ function showApdResult(filename) {
         <div class="apd-row"><span class="apd-key">TYPE</span><span class="apd-val">${d.applicationType || '—'}</span></div>
         <div class="apd-row"><span class="apd-key">FORM</span><span class="apd-val">${d.forms.length} 件</span></div>
         <div class="apd-row"><span class="apd-key">DIMENSION</span><span class="apd-val">${d.dimensions.join(', ') || '—'}</span></div>
-        <div class="apd-row"><span class="apd-key">SCRIPT</span><span class="apd-val">${d.scripts.length} 件</span></div>
+        <div class="apd-row"><span class="apd-key">#PERIOD Members</span><span class="apd-val">${d.periodMembers.join(', ') || '—'}</span></div>
+        <div class="apd-row"><span class="apd-key">#SCENARIO</span><span class="apd-val">${d.scenarioMembers.length} 件</span></div>
         <div class="apd-row"><span class="apd-key">TRANSLATION TABLE</span><span class="apd-val">${d.translationTables.length} 件</span></div>
-        <div class="apd-row"><span class="apd-key">#PERIOD メンバー</span><span class="apd-val">${d.periodMembers.join(', ') || '—'}</span></div>
-        <div class="apd-row"><span class="apd-key">SCENARIO</span><span class="apd-val">${d.scenarioMembers.length} 件</span></div>
+        <div class="apd-row"><span class="apd-key">SCRIPT</span><span class="apd-val">${d.scripts.length} 件</span></div>
       </div>
     </div>`;
   document.getElementById('apd-result').classList.remove('hidden');
@@ -159,9 +159,10 @@ function updateReqTypeUI() {
   const ttGroup     = ['IMPORT_TRANSLATION_TABLE'];
 
   document.getElementById('param-form-group').classList.toggle('hidden', !formGroup.includes(v));
+  document.getElementById('param-import-options').classList.toggle('hidden', v !== 'IMPORT_VALUES');
+  document.getElementById('param-import-pov').classList.toggle('hidden', v !== 'IMPORT_VALUES');
   document.getElementById('param-dim-group').classList.toggle('hidden', !dimGroup.includes(v));
   document.getElementById('param-role-field').classList.toggle('hidden', v !== 'UPDATE_DIMENSION');
-  document.getElementById('param-import-pov').classList.toggle('hidden', v !== 'IMPORT_VALUES');
   document.getElementById('param-script-group').classList.toggle('hidden', !scriptGroup.includes(v));
   document.getElementById('param-tt-group').classList.toggle('hidden', !ttGroup.includes(v));
 }
@@ -181,6 +182,9 @@ function getConfig() {
     pDimRole:          document.querySelector('input[name=dimRole]:checked')?.value || 'DESIGNER',
     pScript:           document.getElementById('p-script').value,
     pTT:               document.getElementById('p-tt').value,
+    importFormat:    document.querySelector('input[name=importFormat]:checked')?.value || 'csv',
+    importNewline:   document.querySelector('input[name=importNewline]:checked')?.value || 'lf',
+    importSeverity:  document.querySelector('input[name=importSeverity]:checked')?.value || 'INFO',
     importPovDims: Array.from(document.querySelectorAll('#pov-list .pov-row')).map(row => {
       const dim  = row.dataset.dim;
       const mode = row.querySelector('input[type=radio]:checked')?.value || 'runtime';
@@ -221,6 +225,31 @@ function buildSummary() {
   const tbl = document.getElementById('summary-table');
   tbl.innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
 }
+
+// ── Individual file download / copy ──────────────────────────────────
+
+function downloadSingleFile(filename, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+
+function downloadBat() { downloadSingleFile('run.bat', genRunBat(getConfig()), 'text/plain'); }
+function downloadXml() { downloadSingleFile('request.xml', genRequestXml(getConfig()), 'application/xml'); }
+
+function copyToClipboard(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.classList.add('copied');
+    const orig = btn.textContent;
+    btn.textContent = '✓ コピー済み';
+    setTimeout(() => { btn.classList.remove('copied'); btn.textContent = orig; }, 1800);
+  });
+}
+
+function copyBat(btn) { copyToClipboard(genRunBat(getConfig()), btn); }
+function copyXml(btn) { copyToClipboard(genRequestXml(getConfig()), btn); }
 
 // ── ZIP generation ───────────────────────────────────────────────────
 
