@@ -52,6 +52,8 @@ function showApdResult(filename) {
         <div class="apd-row"><span class="apd-key">#SCENARIO</span><span class="apd-val">${d.scenarioMembers.length} 件</span></div>
         <div class="apd-row"><span class="apd-key">TRANSLATION TABLE</span><span class="apd-val">${d.translationTables.length} 件</span></div>
         <div class="apd-row"><span class="apd-key">SCRIPT</span><span class="apd-val">${d.scripts.length} 件</span></div>
+        <div class="apd-row"><span class="apd-key">SCHEMA_VERSION</span><span class="apd-val">${d.schemaVersion || '—'}</span></div>
+        <div class="apd-row"><span class="apd-key">Requester JAR</span><span class="apd-val">${jarFilename({ schemaVersion: d.schemaVersion })}</span></div>
       </div>
     </div>`;
   document.getElementById('apd-result').classList.remove('hidden');
@@ -178,6 +180,7 @@ function updateReqTypeUI() {
 function getConfig() {
   return {
     applicationName:      apdData ? apdData.application : '',
+    schemaVersion:        apdData ? apdData.schemaVersion : '',
     execMode:             'interactive',
     connType:             'envbat',
     serverType:           document.querySelector('input[name=serverType]:checked').value,
@@ -308,7 +311,7 @@ async function generateZip() {
   const proc = root.folder('process');
 
   root.file('env.bat', genEnvBat(c));
-  root.file('README.txt', genReadme());
+  root.file('README.txt', genReadme(c));
   proc.file('request.xml', genRequestXml(c));
   proc.file('run.bat', genRunBat(c));
   proc.file('logs/.gitkeep', '');

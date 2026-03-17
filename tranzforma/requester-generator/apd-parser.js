@@ -21,6 +21,7 @@ function parseAPD(xml) {
   const result = {
     application:       appEntry.getAttribute('label') || '',
     applicationType:   '',   // ENTERPRISE / WORKGROUP_GROUP etc.
+    schemaVersion:     '',   // e.g. S135
     forms:             [],
     dimensions:        [],
     scripts:           [],
@@ -52,6 +53,10 @@ function parseAPD(xml) {
     if (!text) return null;
     return parser.parseFromString(text, 'application/xml');
   }
+
+  // ── SCHEMA_VERSION ───────────────────────────────────────────────────
+  const schemaVerEntry = childEntries(appEntry, 'SCHEMA_VERSION')[0];
+  if (schemaVerEntry) result.schemaVersion = contentText(schemaVerEntry).trim();
 
   // ── APPLICATION_TYPE ─────────────────────────────────────────────────
   const appTypeEntry = childEntries(appEntry, 'APPLICATION_TYPE')[0];

@@ -1,5 +1,21 @@
 // generator.js - Requester Wizard: bat / XML generation logic
 
+/** スキーマバージョン → requester JAR バージョン 対応表 */
+const SCHEMA_TO_JAR = {
+  'S135': '14.0.2',
+};
+
+/** スキーマバージョンから JAR ファイル名を返す。未知の場合は null */
+function jarVersion(schemaVersion) {
+  return SCHEMA_TO_JAR[schemaVersion] || null;
+}
+
+/** JAR ファイル名を返す（フォールバック付き） */
+function jarFilename(c) {
+  const ver = jarVersion(c.schemaVersion);
+  return ver ? `fusion_place-requester-${ver}.jar` : 'fusion_place-requester-*.jar';
+}
+
 /**
  * Parse POV textarea text into an array of {key, value} objects.
  * Each non-empty line should be "DIM_NAME MEMBER_NAME".
@@ -285,7 +301,7 @@ function genRunBat(c) {
     respFile += '.xml';
 
     b += `${indent}echo   [${label}] Processing...\r\n\r\n`;
-    b += `${indent}java -Xms4096m -Xmx8192m -jar ../fusion_place-requester-14.0.2.jar ^\r\n`;
+    b += `${indent}java -Xms4096m -Xmx8192m -jar ../${jarFilename(c)} ^\r\n`;
     b += `${indent}  -url %URL% -user %USER% -pass %PW% ^\r\n`;
     b += `${indent}  -external true < request.xml > ${respFile} 2>nul\r\n`;
     b += `${indent}set RC=!ERRORLEVEL!\r\n\r\n`;
@@ -303,7 +319,7 @@ function genRunBat(c) {
 
   } else {
     b += `echo Processing...\r\n\r\n`;
-    b += `java -Xms4096m -Xmx8192m -jar ../fusion_place-requester-14.0.2.jar ^\r\n`;
+    b += `java -Xms4096m -Xmx8192m -jar ../${jarFilename(c)} ^\r\n`;
     b += `  -url %URL% -user %USER% -pass %PW% ^\r\n`;
     const respOut = isImportValues ? 'response/response.xml' : 'logs/response.xml';
     b += `  -external true < request.xml > ${respOut} 2>nul\r\n`;
@@ -412,12 +428,12 @@ function genRcCheckSimple(c, indent, isFull, isImportValues) {
   return b;
 }
 
-function genReadme() {
+function genReadme(c) {
   return `Requester Setup
 ===============
 
 1. Download and place the JAR file:
-   fusion_place-requester-14.0.2.jar
+   ${jarFilename(c)}
    -> Place it in this folder (Requester/)
 
 2. Edit env.bat with your connection settings:
