@@ -95,6 +95,12 @@ function populateFromApd() {
       ? 'ENTERPRISE アプリ: 業務責任単位名を入力してください'
       : 'WORKGROUP アプリ: #NONE を入力してください';
   }
+  const scriptHint = document.getElementById('script-participant-hint');
+  if (scriptHint) {
+    scriptHint.textContent = apdData.applicationType === 'ENTERPRISE'
+      ? 'ENTERPRISE アプリ: 業務責任単位名を入力してください'
+      : 'WORKGROUP アプリ: #NONE を入力してください';
+  }
 }
 
 function fillSelect(id, items) {
@@ -153,50 +159,57 @@ function populatePovRows(dims) {
 
 function updateReqTypeUI() {
   const v = document.querySelector('input[name=reqType]:checked').value;
-  const formGroup   = ['EXPORT_VALUES', 'IMPORT_VALUES', 'CALCULATE_BY_FORM'];
-  const dimGroup    = ['UPDATE_DIMENSION', 'EXPORT_DIMENSION'];
-  const scriptGroup = ['RUN_SCRIPT'];
-  const ttGroup     = ['IMPORT_TRANSLATION_TABLE'];
+  const formGroup = ['EXPORT_VALUES', 'IMPORT_VALUES', 'CALCULATE_BY_FORM'];
+  const dimGroup  = ['UPDATE_DIMENSION', 'EXPORT_DIMENSION'];
 
   document.getElementById('param-form-group').classList.toggle('hidden', !formGroup.includes(v));
+  document.getElementById('param-export-options').classList.toggle('hidden', v !== 'EXPORT_VALUES');
+  document.getElementById('param-import-pov').classList.toggle('hidden', !formGroup.includes(v));
   document.getElementById('param-import-options').classList.toggle('hidden', v !== 'IMPORT_VALUES');
-  document.getElementById('param-import-pov').classList.toggle('hidden', v !== 'IMPORT_VALUES');
   document.getElementById('param-dim-group').classList.toggle('hidden', !dimGroup.includes(v));
   document.getElementById('param-role-field').classList.toggle('hidden', v !== 'UPDATE_DIMENSION');
-  document.getElementById('param-script-group').classList.toggle('hidden', !scriptGroup.includes(v));
-  document.getElementById('param-tt-group').classList.toggle('hidden', !ttGroup.includes(v));
+  document.getElementById('param-export-dim-options').classList.toggle('hidden', v !== 'EXPORT_DIMENSION');
+  document.getElementById('param-script-group').classList.toggle('hidden', v !== 'RUN_SCRIPT');
+  document.getElementById('param-tt-group').classList.toggle('hidden', v !== 'IMPORT_TRANSLATION_TABLE');
 }
 
 // ── Config collection ────────────────────────────────────────────────
 
 function getConfig() {
   return {
-    applicationName:   apdData ? apdData.application : '',
-    execMode:          'interactive',
-    connType:          'envbat',
-    serverType:        document.querySelector('input[name=serverType]:checked').value,
-    reqType:           document.querySelector('input[name=reqType]:checked').value,
-    pForm:             document.getElementById('p-form').value,
-    pParticipant:      document.getElementById('p-participant').value.trim(),
-    pDimension:        document.getElementById('p-dimension').value,
-    pDimRole:          document.querySelector('input[name=dimRole]:checked')?.value || 'DESIGNER',
-    pScript:           document.getElementById('p-script').value,
-    pTT:               document.getElementById('p-tt').value,
-    importFormat:    document.querySelector('input[name=importFormat]:checked')?.value || 'csv',
-    importNewline:   document.querySelector('input[name=importNewline]:checked')?.value || 'lf',
-    importSeverity:  document.querySelector('input[name=importSeverity]:checked')?.value || 'INFO',
-    importPovDims: Array.from(document.querySelectorAll('#pov-list .pov-row')).map(row => {
+    applicationName:      apdData ? apdData.application : '',
+    execMode:             'interactive',
+    connType:             'envbat',
+    serverType:           document.querySelector('input[name=serverType]:checked').value,
+    reqType:              document.querySelector('input[name=reqType]:checked').value,
+    pForm:                document.getElementById('p-form').value,
+    pParticipant:         document.getElementById('p-participant').value.trim(),
+    pDimension:           document.getElementById('p-dimension').value,
+    pDimRole:             document.querySelector('input[name=dimRole]:checked')?.value || 'DESIGNER',
+    pScript:              document.getElementById('p-script').value,
+    pScriptParticipant:   document.getElementById('p-script-participant')?.value.trim() || 'ADMIN',
+    pTT:                  document.getElementById('p-tt').value,
+    exportFormat:         document.querySelector('input[name=exportFormat]:checked')?.value || 'omit',
+    exportNewline:        document.querySelector('input[name=exportNewline]:checked')?.value || 'omit',
+    exportQuoteStyle:     document.querySelector('input[name=exportQuoteStyle]:checked')?.value || 'omit',
+    exportPovText:        document.getElementById('export-pov-text')?.value || '',
+    importFormat:         document.querySelector('input[name=importFormat]:checked')?.value || 'omit',
+    importNewline:        document.querySelector('input[name=importNewline]:checked')?.value || 'omit',
+    importSeverity:       document.querySelector('input[name=importSeverity]:checked')?.value || 'INFO',
+    formPovDims: Array.from(document.querySelectorAll('#pov-list .pov-row')).map(row => {
       const dim  = row.dataset.dim;
       const mode = row.querySelector('input[type=radio]:checked')?.value || 'runtime';
       const val  = row.querySelector('.pov-val');
       return { dim, mode, value: mode === 'fixed' ? (val ? val.value : '') : '' };
     }),
-    monthLoop:         document.querySelector('input[name=monthLoop]:checked').value,
-    loopScenario:      document.getElementById('loop-scenario').checked,
-    scenarioList:      document.getElementById('scenario-list').value.trim(),
-    loopSbu:           document.getElementById('loop-sbu').checked,
-    sbuList:           document.getElementById('sbu-list').value.trim(),
-    errLevel:          document.querySelector('input[name=errLevel]:checked').value,
+    scriptPovText:        document.getElementById('script-pov-text')?.value || '',
+    exportDimFmtVer:      document.querySelector('input[name=exportDimFmtVer]:checked')?.value || 'omit',
+    monthLoop:            document.querySelector('input[name=monthLoop]:checked').value,
+    loopScenario:         document.getElementById('loop-scenario').checked,
+    scenarioList:         document.getElementById('scenario-list').value.trim(),
+    loopSbu:              document.getElementById('loop-sbu').checked,
+    sbuList:              document.getElementById('sbu-list').value.trim(),
+    errLevel:             document.querySelector('input[name=errLevel]:checked').value,
   };
 }
 
@@ -209,19 +222,49 @@ function buildSummary() {
     ['接続情報',           `env.bat 参照（${c.serverType}）`],
     ['実行方式',           'インタラクティブ（手動実行）'],
     ['リクエストタイプ',   c.reqType],
-    ['FORM',               c.pForm || '(未設定)'],
-    ['PARTICIPANT',        c.pParticipant || '(未設定)'],
-    ['月ループ',           c.monthLoop === 'yes' ? 'あり' : 'なし'],
-    ['シナリオループ',     c.loopScenario ? c.scenarioList : 'なし'],
-    ['SBU ループ',         c.loopSbu ? c.sbuList : 'なし'],
-    ['エラーハンドリング', c.errLevel === 'full' ? 'フル' : 'ミニマル'],
   ];
-  if (c.reqType === 'IMPORT_VALUES' && c.importPovDims && c.importPovDims.length) {
-    const povDesc = c.importPovDims.map(p =>
+
+  // Type-specific params
+  if (['EXPORT_VALUES', 'IMPORT_VALUES', 'CALCULATE_BY_FORM'].includes(c.reqType)) {
+    rows.push(['FORM',        c.pForm || '(未設定)']);
+    rows.push(['PARTICIPANT', c.pParticipant || '(未設定)']);
+  }
+  if (c.reqType === 'EXPORT_VALUES') {
+    if (c.exportFormat !== 'omit')      rows.push(['FORMAT',      c.exportFormat]);
+    if (c.exportNewline !== 'omit')     rows.push(['NEWLINE_STYLE', c.exportNewline]);
+    if (c.exportQuoteStyle !== 'omit')  rows.push(['QUOTE_STYLE', c.exportQuoteStyle]);
+  }
+  if (['EXPORT_VALUES', 'IMPORT_VALUES', 'CALCULATE_BY_FORM'].includes(c.reqType) && c.formPovDims && c.formPovDims.length) {
+    const povDesc = c.formPovDims.map(p =>
       p.mode === 'fixed' ? `${p.dim}=${p.value}` : `${p.dim}(実行時)`
     ).join(', ');
-    rows.splice(6, 0, ['POV パラメータ', povDesc]);
+    rows.push(['POV', povDesc]);
   }
+  if (c.reqType === 'IMPORT_VALUES') {
+    if (c.importFormat !== 'omit')    rows.push(['FORMAT',       c.importFormat]);
+    if (c.importNewline !== 'omit')   rows.push(['NEWLINE_STYLE', c.importNewline]);
+    if (c.importSeverity !== 'omit')  rows.push(['MIN_SEVERITY', c.importSeverity]);
+  }
+  if (['UPDATE_DIMENSION', 'EXPORT_DIMENSION'].includes(c.reqType)) {
+    rows.push(['DIMENSION', c.pDimension || '(未設定)']);
+  }
+  if (c.reqType === 'UPDATE_DIMENSION') rows.push(['ROLE', c.pDimRole]);
+  if (c.reqType === 'EXPORT_DIMENSION' && c.exportDimFmtVer !== 'omit') {
+    rows.push(['FORMAT_VERSION', c.exportDimFmtVer]);
+  }
+  if (c.reqType === 'RUN_SCRIPT') {
+    rows.push(['SCRIPT',      c.pScript || '(未設定)']);
+    rows.push(['PARTICIPANT', c.pScriptParticipant || '(未設定)']);
+  }
+  if (c.reqType === 'IMPORT_TRANSLATION_TABLE') {
+    rows.push(['TRANSLATION_TABLE', c.pTT || '(未設定)']);
+  }
+
+  rows.push(['月ループ',           c.monthLoop === 'yes' ? 'あり' : 'なし']);
+  rows.push(['シナリオループ',     c.loopScenario ? c.scenarioList : 'なし']);
+  rows.push(['SBU ループ',         c.loopSbu ? c.sbuList : 'なし']);
+  rows.push(['エラーハンドリング', c.errLevel === 'full' ? 'フル' : 'ミニマル']);
+
   const tbl = document.getElementById('summary-table');
   tbl.innerHTML = rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join('');
 }

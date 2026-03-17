@@ -185,6 +185,41 @@
 
 .hidden { display: none !important; }
 
+/* ── Details (optional sections) ── */
+details.opt-section {
+  margin-top: 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+details.opt-section > summary {
+  padding: 10px 16px;
+  cursor: pointer;
+  font: 600 12px var(--mono);
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  user-select: none;
+  list-style: none;
+}
+details.opt-section > summary::-webkit-details-marker { display: none; }
+details.opt-section > summary::before { content: '▶  '; }
+details.opt-section[open] > summary::before { content: '▼  '; }
+details.opt-section > summary:hover { color: var(--text2); }
+details.opt-section > .opt-content {
+  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── POV textarea ── */
+.pov-textarea {
+  width: 100%; box-sizing: border-box;
+  padding: 10px 14px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 5px; color: var(--text); font: 400 14px var(--mono);
+  resize: vertical; min-height: 80px;
+}
+.pov-textarea:focus { outline: none; border-color: var(--accent); }
+
 </style>
 </head>
 <body>
@@ -310,28 +345,28 @@
       <h2>リクエストタイプ</h2>
       <div class="field">
         <div class="radio-group">
-          <label><input type="radio" name="reqType" value="EXPORT_VALUES" disabled>
+          <label><input type="radio" name="reqType" value="EXPORT_VALUES">
             <div><div class="label-title">EXPORT_VALUES</div><div class="label-desc">フォームを用いたデータのエクスポート</div></div>
           </label>
           <label><input type="radio" name="reqType" value="IMPORT_VALUES" checked>
             <div><div class="label-title">IMPORT_VALUES</div><div class="label-desc">フォームを用いたデータのインポート</div></div>
           </label>
-          <label><input type="radio" name="reqType" value="CALCULATE_BY_FORM" disabled>
+          <label><input type="radio" name="reqType" value="CALCULATE_BY_FORM">
             <div><div class="label-title">CALCULATE_BY_FORM</div><div class="label-desc">フォームを用いた計算処理の実行</div></div>
           </label>
-          <label><input type="radio" name="reqType" value="UPDATE_DIMENSION" disabled>
+          <label><input type="radio" name="reqType" value="UPDATE_DIMENSION">
             <div><div class="label-title">UPDATE_DIMENSION</div><div class="label-desc">ディメンションメンバのインポート</div></div>
           </label>
-          <label><input type="radio" name="reqType" value="EXPORT_DIMENSION" disabled>
+          <label><input type="radio" name="reqType" value="EXPORT_DIMENSION">
             <div><div class="label-title">EXPORT_DIMENSION</div><div class="label-desc">ディメンションメンバのエクスポート</div></div>
           </label>
-          <label><input type="radio" name="reqType" value="IMPORT_TRANSLATION_TABLE" disabled>
+          <label><input type="radio" name="reqType" value="IMPORT_TRANSLATION_TABLE">
             <div><div class="label-title">IMPORT_TRANSLATION_TABLE</div><div class="label-desc">変換テーブルのインポート</div></div>
           </label>
-          <label><input type="radio" name="reqType" value="RUN_SCRIPT" disabled>
+          <label><input type="radio" name="reqType" value="RUN_SCRIPT">
             <div><div class="label-title">RUN_SCRIPT</div><div class="label-desc">スクリプトの実行</div></div>
           </label>
-          <label><input type="radio" name="reqType" value="BACKUP_APPLICATION" disabled>
+          <label><input type="radio" name="reqType" value="BACKUP_APPLICATION">
             <div><div class="label-title">BACKUP_APPLICATION</div><div class="label-desc">アプリケーションのバックアップ</div></div>
           </label>
         </div>
@@ -350,42 +385,77 @@
         </div>
       </div>
 
-      <!-- IMPORT_VALUES: POV selection (dynamic from FORM selection) -->
+      <!-- EXPORT_VALUES / IMPORT_VALUES / CALCULATE_BY_FORM: POV selection -->
       <div id="param-import-pov" class="sub-field hidden">
         <div class="field">
-          <label>POV パラメータ（request.xml に渡す変数）</label>
-          <div class="hint">フォームのパラメータ次元ごとに「実行時指定」か「固定値」を選択してください。</div>
+          <label>POV パラメータ</label>
+          <div class="hint">フォームのパラメータ次元ごとに「実行時変数」か「固定値」を選択してください。</div>
           <div id="pov-list">
             <span style="font:400 11px var(--mono);color:var(--text3)">フォームを選択してください</span>
           </div>
         </div>
       </div>
 
+      <!-- EXPORT_VALUES: optional options -->
+      <div id="param-export-options" class="sub-field hidden">
+        <details class="opt-section">
+          <summary>詳細設定（任意）</summary>
+          <div class="opt-content">
+            <div class="field">
+              <label>FORMAT</label>
+              <div class="radio-group" style="flex-direction:row; gap:12px;">
+                <label style="flex:none; padding:8px 16px;"><input type="radio" name="exportFormat" value="omit" checked> <span class="label-title">指定なし（CSV）</span></label>
+                <label style="flex:none; padding:8px 16px;"><input type="radio" name="exportFormat" value="tsv"> <span class="label-title">TSV</span></label>
+              </div>
+            </div>
+            <div class="field">
+              <label>NEWLINE_STYLE</label>
+              <div class="radio-group" style="flex-direction:row; gap:12px;">
+                <label style="flex:none; padding:8px 16px;"><input type="radio" name="exportNewline" value="omit" checked> <span class="label-title">指定なし（CRLF）</span></label>
+                <label style="flex:none; padding:8px 16px;"><input type="radio" name="exportNewline" value="lf"> <span class="label-title">LF</span></label>
+              </div>
+            </div>
+            <div class="field">
+              <label>QUOTE_STYLE</label>
+              <div class="radio-group" style="flex-direction:row; gap:12px;">
+                <label style="flex:none; padding:8px 16px;"><input type="radio" name="exportQuoteStyle" value="omit" checked> <span class="label-title">指定なし（always）</span></label>
+                <label style="flex:none; padding:8px 16px;"><input type="radio" name="exportQuoteStyle" value="never"> <span class="label-title">never</span></label>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+
       <!-- IMPORT_VALUES: FORMAT / NEWLINE_STYLE / MIN_SEVERITY -->
       <div id="param-import-options" class="sub-field hidden">
-        <div class="field">
-          <label>FORMAT</label>
-          <div class="radio-group" style="flex-direction:row; gap:12px;">
-            <label style="flex:none; padding:8px 16px;"><input type="radio" name="importFormat" value="csv" checked> <span class="label-title">CSV</span></label>
-            <label style="flex:none; padding:8px 16px;"><input type="radio" name="importFormat" value="tsv"> <span class="label-title">TSV</span></label>
+        <details class="opt-section">
+          <summary>詳細設定（任意）</summary>
+          <div class="opt-content">
+            <div class="field">
+              <label>FORMAT</label>
+              <div class="radio-group" style="flex-direction:row; gap:12px;">
+                <label style="flex:none; padding:8px 16px;"><input type="radio" name="importFormat" value="omit" checked> <span class="label-title">指定なし（CSV）</span></label>
+                <label style="flex:none; padding:8px 16px;"><input type="radio" name="importFormat" value="tsv"> <span class="label-title">TSV</span></label>
+              </div>
+            </div>
+            <div class="field">
+              <label>NEWLINE_STYLE</label>
+              <div class="radio-group" style="flex-direction:row; gap:12px;">
+                <label style="flex:none; padding:8px 16px;"><input type="radio" name="importNewline" value="omit" checked> <span class="label-title">指定なし（CRLF）</span></label>
+                <label style="flex:none; padding:8px 16px;"><input type="radio" name="importNewline" value="lf"> <span class="label-title">LF</span></label>
+              </div>
+            </div>
+            <div class="field">
+              <label>MIN_SEVERITY</label>
+              <div class="radio-group" style="flex-direction:row; gap:12px;">
+                <label style="flex:none; padding:8px 16px;"><input type="radio" name="importSeverity" value="omit"> <span class="label-title">指定なし（ALL）</span></label>
+                <label style="flex:none; padding:8px 16px;"><input type="radio" name="importSeverity" value="ERROR"> <span class="label-title">ERROR</span></label>
+                <label style="flex:none; padding:8px 16px;"><input type="radio" name="importSeverity" value="WARNING"> <span class="label-title">WARNING</span></label>
+                <label style="flex:none; padding:8px 16px;"><input type="radio" name="importSeverity" value="INFO" checked> <span class="label-title">INFO</span></label>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="field">
-          <label>NEWLINE_STYLE</label>
-          <div class="radio-group" style="flex-direction:row; gap:12px;">
-            <label style="flex:none; padding:8px 16px;"><input type="radio" name="importNewline" value="lf" checked> <span class="label-title">LF</span></label>
-            <label style="flex:none; padding:8px 16px;"><input type="radio" name="importNewline" value="crlf"> <span class="label-title">CRLF</span></label>
-          </div>
-        </div>
-        <div class="field">
-          <label>MIN_SEVERITY</label>
-          <div class="radio-group" style="flex-direction:row; gap:12px;">
-            <label style="flex:none; padding:8px 16px;"><input type="radio" name="importSeverity" value="INFO" checked> <span class="label-title">INFO</span></label>
-            <label style="flex:none; padding:8px 16px;"><input type="radio" name="importSeverity" value="WARNING"> <span class="label-title">WARNING</span></label>
-            <label style="flex:none; padding:8px 16px;"><input type="radio" name="importSeverity" value="ERROR"> <span class="label-title">ERROR</span></label>
-            <label style="flex:none; padding:8px 16px;"><input type="radio" name="importSeverity" value="ALL"> <span class="label-title">全件</span><div class="label-desc">パラメータタグなし</div></label>
-          </div>
-        </div>
+        </details>
       </div>
 
       <!-- UPDATE_DIMENSION / EXPORT_DIMENSION -->
@@ -403,12 +473,43 @@
         </div>
       </div>
 
+      <!-- EXPORT_DIMENSION: optional options -->
+      <div id="param-export-dim-options" class="sub-field hidden">
+        <details class="opt-section">
+          <summary>詳細設定（任意）</summary>
+          <div class="opt-content">
+            <div class="field">
+              <label>FORMAT_VERSION</label>
+              <div class="radio-group" style="flex-direction:row; gap:12px;">
+                <label style="flex:none; padding:8px 16px;"><input type="radio" name="exportDimFmtVer" value="omit" checked> <span class="label-title">指定なし（1.0）</span></label>
+                <label style="flex:none; padding:8px 16px;"><input type="radio" name="exportDimFmtVer" value="12.2"> <span class="label-title">12.2</span></label>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+
       <!-- RUN_SCRIPT -->
       <div id="param-script-group" class="sub-field hidden">
         <div class="field">
           <label>SCRIPT</label>
           <select id="p-script"></select>
         </div>
+        <div class="field">
+          <label>PARTICIPANT</label>
+          <div class="hint" id="script-participant-hint"></div>
+          <input type="text" id="p-script-participant" value="ADMIN">
+        </div>
+        <details class="opt-section">
+          <summary>詳細設定（任意）</summary>
+          <div class="opt-content">
+            <div class="field">
+              <label>POV（追加次元）</label>
+              <div class="hint">1行 1次元。スペース区切りで「次元名 メンバ名」と入力してください。<br>例: ENTITY ZDV01</div>
+              <textarea id="script-pov-text" class="pov-textarea" rows="4" placeholder="ENTITY ZDV01&#10;PRODUCT P001"></textarea>
+            </div>
+          </div>
+        </details>
       </div>
 
       <!-- IMPORT_TRANSLATION_TABLE -->

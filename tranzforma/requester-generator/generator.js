@@ -1,5 +1,22 @@
 // generator.js - Requester Wizard: bat / XML generation logic
 
+/**
+ * Parse POV textarea text into an array of {key, value} objects.
+ * Each non-empty line should be "DIM_NAME MEMBER_NAME".
+ * Lines starting with "//" are treated as comments and ignored.
+ */
+function parsePovText(text) {
+  return (text || '').split('\n')
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('//'))
+    .map(l => {
+      const sp = l.indexOf(' ');
+      if (sp < 0) return null;
+      return { key: l.substring(0, sp).trim(), value: l.substring(sp + 1).trim() };
+    })
+    .filter(p => p && p.key && p.value);
+}
+
 function genEnvBat(c) {
   const apl = (c && c.applicationName) ? c.applicationName : 'YOUR_APPLICATION';
   const url = c.serverType === 'SDX'
@@ -40,16 +57,13 @@ function genRequestXml(c) {
     xml += `      <parameter name="APPLICATION" value="${apl}"/>\n`;
     xml += `      <parameter name="FORM" value="${c.pForm || 'FORM_LABEL'}"/>\n`;
     xml += `      <parameter name="PARTICIPANT" value="${c.pParticipant || 'ADMIN'}"/>\n`;
-    if (c.monthLoop === 'yes') {
-      xml += `      <parameter name="POV" key="#FY" value="%FY%"/>\n`;
-      xml += `      <parameter name="POV" key="#PERIOD" value="%PERIOD%"/>\n`;
+    for (const pov of (c.formPovDims || [])) {
+      const varName = pov.dim.replace(/^#/, '');
+      xml += `      <parameter name="POV" key="${pov.dim}" value="%${varName}%"/>\n`;
     }
-    if (c.loopScenario) xml += `      <parameter name="POV" key="SCENARIO" value="%SCENARIO%"/>\n`;
-    if (c.loopSbu)      xml += `      <parameter name="POV" key="SBU" value="%SBU%"/>\n`;
-    xml += `      <!-- TODO: Add more POV parameters as needed -->\n`;
-    xml += `      <parameter name="FORMAT" value="csv"/>\n`;
-    xml += `      <parameter name="NEWLINE_STYLE" value="crlf"/>\n`;
-    xml += `      <parameter name="QUOTE_STYLE" value="always"/>\n`;
+    if (c.exportFormat !== 'omit')     xml += `      <parameter name="FORMAT" value="${c.exportFormat}"/>\n`;
+    if (c.exportNewline !== 'omit')    xml += `      <parameter name="NEWLINE_STYLE" value="${c.exportNewline}"/>\n`;
+    if (c.exportQuoteStyle !== 'omit') xml += `      <parameter name="QUOTE_STYLE" value="${c.exportQuoteStyle}"/>\n`;
     xml += `    </parameters>\n`;
     xml += genContents(c.reqType);
     xml += `  </request>\n`;
@@ -60,15 +74,13 @@ function genRequestXml(c) {
     xml += `      <parameter name="APPLICATION" value="${apl}"/>\n`;
     xml += `      <parameter name="FORM" value="${c.pForm || 'FORM_LABEL'}"/>\n`;
     xml += `      <parameter name="PARTICIPANT" value="${c.pParticipant || 'ADMIN'}"/>\n`;
-    for (const pov of (c.importPovDims || [])) {
+    for (const pov of (c.formPovDims || [])) {
       const varName = pov.dim.replace(/^#/, '');
       xml += `      <parameter name="POV" key="${pov.dim}" value="%${varName}%"/>\n`;
     }
-    xml += `      <parameter name="FORMAT" value="${c.importFormat || 'csv'}"/>\n`;
-    xml += `      <parameter name="NEWLINE_STYLE" value="${c.importNewline || 'lf'}"/>\n`;
-    if ((c.importSeverity || 'INFO') !== 'ALL') {
-      xml += `      <parameter name="MIN_SEVERITY" value="${c.importSeverity}"/>\n`;
-    }
+    if (c.importFormat !== 'omit')   xml += `      <parameter name="FORMAT" value="${c.importFormat}"/>\n`;
+    if (c.importNewline !== 'omit')  xml += `      <parameter name="NEWLINE_STYLE" value="${c.importNewline}"/>\n`;
+    if (c.importSeverity !== 'omit') xml += `      <parameter name="MIN_SEVERITY" value="${c.importSeverity}"/>\n`;
     xml += `    </parameters>\n`;
     xml += genContents(c.reqType);
     xml += `  </request>\n`;
@@ -79,11 +91,10 @@ function genRequestXml(c) {
     xml += `      <parameter name="APPLICATION" value="${apl}"/>\n`;
     xml += `      <parameter name="FORM" value="${c.pForm || 'FORM_LABEL'}"/>\n`;
     xml += `      <parameter name="PARTICIPANT" value="${c.pParticipant || '#NONE'}"/>\n`;
-    if (c.monthLoop === 'yes') {
-      xml += `      <parameter name="POV" key="#FY" value="%FY%"/>\n`;
-      xml += `      <parameter name="POV" key="#PERIOD" value="%PERIOD%"/>\n`;
+    for (const pov of (c.formPovDims || [])) {
+      const varName = pov.dim.replace(/^#/, '');
+      xml += `      <parameter name="POV" key="${pov.dim}" value="%${varName}%"/>\n`;
     }
-    xml += `      <!-- TODO: Add more POV parameters as needed -->\n`;
     xml += `    </parameters>\n`;
     xml += genContents(c.reqType);
     xml += `  </request>\n`;
@@ -103,15 +114,16 @@ function genRequestXml(c) {
     xml += `    <parameters>\n`;
     xml += `      <parameter name="APPLICATION" value="${apl}"/>\n`;
     xml += `      <parameter name="DIMENSION" value="${c.pDimension || 'DIM_LABEL'}"/>\n`;
+    if (c.exportDimFmtVer !== 'omit') xml += `      <parameter name="FORMAT_VERSION" value="${c.exportDimFmtVer}"/>\n`;
     xml += `    </parameters>\n`;
     xml += genContents(c.reqType);
     xml += `  </request>\n`;
 
   } else if (c.reqType === 'IMPORT_TRANSLATION_TABLE') {
-    xml += `  <request type="IMPORT_TRANSLATION_TABLE" desc="Import translation table">\n`;
+    xml += `  <request type="IMPORT_TRANSLATION_TABLE" desc="Import translation table ${c.pTT || ''}">\n`;
     xml += `    <parameters>\n`;
     xml += `      <parameter name="APPLICATION" value="${apl}"/>\n`;
-    xml += `      <!-- TODO: Add TABLE and other parameters as needed -->\n`;
+    xml += `      <parameter name="TRANSLATION_TABLE" value="${c.pTT || 'TABLE_LABEL'}"/>\n`;
     xml += `    </parameters>\n`;
     xml += genContents(c.reqType);
     xml += `  </request>\n`;
@@ -121,11 +133,16 @@ function genRequestXml(c) {
     xml += `    <parameters>\n`;
     xml += `      <parameter name="APPLICATION" value="${apl}"/>\n`;
     xml += `      <parameter name="SCRIPT" value="${c.pScript || 'SCRIPT_LABEL'}"/>\n`;
+    xml += `      <parameter name="PARTICIPANT" value="${c.pScriptParticipant || 'ADMIN'}"/>\n`;
     if (c.monthLoop === 'yes') {
       xml += `      <parameter name="POV" key="#FY" value="%FY%"/>\n`;
       xml += `      <parameter name="POV" key="#PERIOD" value="%PERIOD%"/>\n`;
     }
-    xml += `      <!-- TODO: Add more POV parameters as needed -->\n`;
+    if (c.loopScenario) xml += `      <parameter name="POV" key="SCENARIO" value="%SCENARIO%"/>\n`;
+    if (c.loopSbu)      xml += `      <parameter name="POV" key="SBU" value="%SBU%"/>\n`;
+    for (const p of parsePovText(c.scriptPovText)) {
+      xml += `      <parameter name="POV" key="${p.key}" value="${p.value}"/>\n`;
+    }
     xml += `    </parameters>\n`;
     xml += genContents(c.reqType);
     xml += `  </request>\n`;
@@ -179,27 +196,29 @@ function genRunBat(c) {
     b += `echo.\r\n\r\n`;
   }
 
-  // IMPORT_VALUES: pre-run source file check + POV variable setup
+  // IMPORT_VALUES: pre-run source file check
   if (isImportValues) {
     b += `rem --- Check source file ---\r\n`;
     b += `if not exist "src\\input.csv" (\r\n`;
     b += `  echo ERROR: src\\input.csv not found.\r\n`;
     if (isInteractive) b += `  pause\r\n`;
     b += `  exit /b 1\r\n)\r\n\r\n`;
+  }
 
-    const hasPov = c.importPovDims && c.importPovDims.length > 0;
-    if (hasPov) {
-      b += `rem --- POV parameters ---\r\n`;
-      for (const pov of c.importPovDims) {
-        const varName = pov.dim.replace(/^#/, '');
-        if (pov.mode === 'fixed') {
-          b += `set ${varName}=${pov.value}\r\n`;
-        } else {
-          b += `set /p ${varName}=${pov.dim} value: \r\n`;
-        }
+  // POV variable setup (EXPORT_VALUES / IMPORT_VALUES / CALCULATE_BY_FORM)
+  const isFormBased = ['EXPORT_VALUES', 'IMPORT_VALUES', 'CALCULATE_BY_FORM'].includes(c.reqType);
+  const hasPov = isFormBased && c.formPovDims && c.formPovDims.length > 0;
+  if (hasPov) {
+    b += `rem --- POV parameters ---\r\n`;
+    for (const pov of c.formPovDims) {
+      const varName = pov.dim.replace(/^#/, '');
+      if (pov.mode === 'fixed') {
+        b += `set ${varName}=${pov.value}\r\n`;
+      } else {
+        b += `set /p ${varName}=${pov.dim} value: \r\n`;
       }
-      b += `\r\n`;
     }
+    b += `\r\n`;
   }
 
   // Month range input
