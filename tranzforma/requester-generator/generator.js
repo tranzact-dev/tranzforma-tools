@@ -1,16 +1,16 @@
 // generator.js - Requester Wizard: bat / XML generation logic
 
-/** スキーマバージョン → requester JAR バージョン 対応表 */
+/** Schema version → requester JAR version mapping */
 const SCHEMA_TO_JAR = {
   'S135': '14.0.2',
 };
 
-/** スキーマバージョンから JAR ファイル名を返す。未知の場合は null */
+/** Returns JAR version for a schema version, or null if unknown */
 function jarVersion(schemaVersion) {
   return SCHEMA_TO_JAR[schemaVersion] || null;
 }
 
-/** JAR ファイル名を返す（フォールバック付き） */
+/** Returns JAR filename with fallback wildcard */
 function jarFilename(c) {
   const ver = jarVersion(c.schemaVersion);
   return ver ? `fusion_place-requester-${ver}.jar` : 'fusion_place-requester-*.jar';
@@ -43,7 +43,6 @@ function genEnvBat(c) {
 
 /**
  * Generate <contents> block for each request type.
- * Edit this function to change contents per request type.
  */
 function genContents(reqType) {
   switch (reqType) {
@@ -54,10 +53,11 @@ function genContents(reqType) {
     case 'UPDATE_DIMENSION':
     case 'IMPORT_TRANSLATION_TABLE':
       return `    <contents>\n      request-contents-file=src/input.csv\n    </contents>\n`;
+    case 'BACKUP_APPLICATION':
+      return `    <contents>\n      returned-contents-file=response/backup.fpbackup, hex2bin\n    </contents>\n`;
     case 'CALCULATE_BY_FORM':
     case 'EXPORT_DIMENSION':
     case 'RUN_SCRIPT':
-    case 'BACKUP_APPLICATION':
     default:
       return `    <contents></contents>\n`;
   }
@@ -66,6 +66,12 @@ function genContents(reqType) {
 function genRequestXml(c) {
   const apl = '%APL%';
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<requests>\n`;
+
+  // Helper: emit loop dim POV parameters
+  const loopDimPovs = (indent) => (c.loopDims || []).map(d => {
+    const varName = d.dim.replace(/^#/, '');
+    return `${indent}<parameter name="POV" key="${d.dim}" value="%${varName}%"/>\n`;
+  }).join('');
 
   if (c.reqType === 'EXPORT_VALUES') {
     xml += `  <request type="EXPORT_VALUES" desc="Export ${c.pForm || 'FORM_LABEL'}">\n`;
@@ -77,6 +83,7 @@ function genRequestXml(c) {
       const varName = pov.dim.replace(/^#/, '');
       xml += `      <parameter name="POV" key="${pov.dim}" value="%${varName}%"/>\n`;
     }
+    xml += loopDimPovs('      ');
     if (c.exportFormat !== 'omit')     xml += `      <parameter name="FORMAT" value="${c.exportFormat}"/>\n`;
     if (c.exportNewline !== 'omit')    xml += `      <parameter name="NEWLINE_STYLE" value="${c.exportNewline}"/>\n`;
     if (c.exportQuoteStyle !== 'omit') xml += `      <parameter name="QUOTE_STYLE" value="${c.exportQuoteStyle}"/>\n`;
@@ -94,6 +101,7 @@ function genRequestXml(c) {
       const varName = pov.dim.replace(/^#/, '');
       xml += `      <parameter name="POV" key="${pov.dim}" value="%${varName}%"/>\n`;
     }
+    xml += loopDimPovs('      ');
     if (c.importFormat !== 'omit')   xml += `      <parameter name="FORMAT" value="${c.importFormat}"/>\n`;
     if (c.importNewline !== 'omit')  xml += `      <parameter name="NEWLINE_STYLE" value="${c.importNewline}"/>\n`;
     if (c.importSeverity !== 'omit') xml += `      <parameter name="MIN_SEVERITY" value="${c.importSeverity}"/>\n`;
@@ -111,6 +119,7 @@ function genRequestXml(c) {
       const varName = pov.dim.replace(/^#/, '');
       xml += `      <parameter name="POV" key="${pov.dim}" value="%${varName}%"/>\n`;
     }
+    xml += loopDimPovs('      ');
     xml += `    </parameters>\n`;
     xml += genContents(c.reqType);
     xml += `  </request>\n`;
@@ -150,12 +159,7 @@ function genRequestXml(c) {
     xml += `      <parameter name="APPLICATION" value="${apl}"/>\n`;
     xml += `      <parameter name="SCRIPT" value="${c.pScript || 'SCRIPT_LABEL'}"/>\n`;
     xml += `      <parameter name="PARTICIPANT" value="${c.pScriptParticipant || 'ADMIN'}"/>\n`;
-    if (c.monthLoop === 'yes') {
-      xml += `      <parameter name="POV" key="#FY" value="%FY%"/>\n`;
-      xml += `      <parameter name="POV" key="#PERIOD" value="%PERIOD%"/>\n`;
-    }
-    if (c.loopScenario) xml += `      <parameter name="POV" key="SCENARIO" value="%SCENARIO%"/>\n`;
-    if (c.loopSbu)      xml += `      <parameter name="POV" key="SBU" value="%SBU%"/>\n`;
+    xml += loopDimPovs('      ');
     for (const p of parsePovText(c.scriptPovText)) {
       xml += `      <parameter name="POV" key="${p.key}" value="${p.value}"/>\n`;
     }
@@ -178,23 +182,24 @@ function genRequestXml(c) {
 
 function genRunBat(c) {
   const isInteractive  = c.execMode === 'interactive';
-  let hasMonthLoop     = c.monthLoop === 'yes';
-  let hasScenario      = hasMonthLoop && c.loopScenario && c.scenarioList;
-  let hasSbu           = hasMonthLoop && c.loopSbu && c.sbuList;
   const isFull         = c.errLevel === 'full';
   const isExport       = c.reqType === 'EXPORT_VALUES';
   const isImportValues = c.reqType === 'IMPORT_VALUES';
   const isImport       = ['IMPORT_VALUES', 'UPDATE_DIMENSION', 'IMPORT_TRANSLATION_TABLE'].includes(c.reqType);
 
-  // IMPORT_VALUES: loop not supported in this version
-  if (isImportValues) { hasMonthLoop = false; hasScenario = false; hasSbu = false; }
+  const loopDims = c.loopDims || [];
+  const hasDim1  = loopDims.length >= 1;
+  const hasDim2  = loopDims.length >= 2;
+  const dim1     = hasDim1 ? loopDims[0] : null;
+  const dim2     = hasDim2 ? loopDims[1] : null;
+  const dim1Var  = dim1 ? dim1.dim.replace(/^#/, '') : '';
+  const dim2Var  = dim2 ? dim2.dim.replace(/^#/, '') : '';
 
   let b = `@echo off\r\ncd /d %~dp0\r\nsetlocal enabledelayedexpansion\r\n\r\n`;
 
-  // Connection info (always env.bat in this version)
   b += `Call ..\\env.bat\r\n\r\n`;
 
-  // Confirmation (interactive mode only)
+  // Confirmation (interactive mode)
   if (isInteractive) {
     b += `rem --- Confirm settings ---\r\n`;
     b += `echo.\r\n`;
@@ -212,8 +217,8 @@ function genRunBat(c) {
     b += `echo.\r\n\r\n`;
   }
 
-  // IMPORT_VALUES: pre-run source file check
-  if (isImportValues) {
+  // IMPORT_VALUES without loop: pre-run source file check
+  if (isImportValues && !hasDim1) {
     b += `rem --- Check source file ---\r\n`;
     b += `if not exist "src\\input.csv" (\r\n`;
     b += `  echo ERROR: src\\input.csv not found.\r\n`;
@@ -221,7 +226,7 @@ function genRunBat(c) {
     b += `  exit /b 1\r\n)\r\n\r\n`;
   }
 
-  // POV variable setup (EXPORT_VALUES / IMPORT_VALUES / CALCULATE_BY_FORM)
+  // POV variable setup (form-based types)
   const isFormBased = ['EXPORT_VALUES', 'IMPORT_VALUES', 'CALCULATE_BY_FORM'].includes(c.reqType);
   const hasPov = isFormBased && c.formPovDims && c.formPovDims.length > 0;
   if (hasPov) {
@@ -237,89 +242,43 @@ function genRunBat(c) {
     b += `\r\n`;
   }
 
-  // Month range input
-  if (hasMonthLoop) {
-    if (isInteractive) {
-      b += `rem --- Start year/month input ---\r\n`;
-      b += `set /p startYM=Start year/month (e.g. 202501):\r\n`;
-      b += `if "%startYM%"=="" (\r\n  echo ERROR: No input\r\n  pause\r\n  exit /b 1\r\n)\r\n\r\n`;
-      b += `rem --- End year/month input (Enter = same as start) ---\r\n`;
-      b += `echo End year/month (press Enter to use same as start: %startYM%):\r\n`;
-      b += `set /p endYM=\r\n`;
-      b += `if "%endYM%"=="" set endYM=%startYM%\r\n\r\n`;
-      b += `echo Start: %startYM%  End: %endYM%\r\n\r\n`;
-    }
-  }
-
-  // Summary log
+  // Summary log setup
   if (isFull) {
     b += `rem --- Summary log setup ---\r\n`;
     b += `for /f "tokens=1-4 delims=/ " %%a in ('date /t') do set d=%%a%%b%%c%%d\r\n`;
     b += `for /f "tokens=1-2 delims=: " %%a in ('time /t') do set t=%%a%%b\r\n`;
-    if (hasMonthLoop) {
-      b += `set SUMMARY_LOG=logs\\summary_%startYM%-%endYM%_%d%%t%.log\r\n`;
-      b += `echo Run Summary Log > "%SUMMARY_LOG%"\r\n`;
-      b += `echo Start: %startYM%  End: %endYM% >> "%SUMMARY_LOG%"\r\n`;
-    } else {
-      b += `set SUMMARY_LOG=logs\\summary_%d%%t%.log\r\n`;
-      b += `echo Run Summary Log > "%SUMMARY_LOG%"\r\n`;
-    }
+    b += `set SUMMARY_LOG=logs\\summary_%d%%t%.log\r\n`;
+    b += `echo Run Summary Log > "%SUMMARY_LOG%"\r\n`;
     b += `echo ======================================== >> "%SUMMARY_LOG%"\r\n\r\n`;
     b += `set ERR_COUNT=0\r\nset OK_COUNT=0\r\n\r\n`;
   }
 
-  // Scenario / SBU lists
-  if (hasScenario) b += `rem --- Scenario list ---\r\nset SCENARIOS=${c.scenarioList}\r\n\r\n`;
-  if (hasSbu)      b += `rem --- SBU list ---\r\nset SBUS=${c.sbuList}\r\n\r\n`;
+  const jar = jarFilename(c);
 
-  // Main loop or single execution
-  if (hasMonthLoop) {
-    b += `rem --- Main loop ---\r\nset currentYM=%startYM%\r\n\r\n`;
-    b += `:loop\r\n`;
-    b += `set yearStr=!currentYM:~0,4!\r\nset monthStr=!currentYM:~4,2!\r\n`;
-    b += `set /a monthNum=1!monthStr! - 100\r\nset /a yearNum=!yearStr!\r\n\r\n`;
-    b += `if !monthNum! LSS 10 (set PERIOD=M0!monthNum!) else (set PERIOD=M!monthNum!)\r\n\r\n`;
-    b += `if !monthNum! GEQ 4 (\r\n  set /a fyYear=!yearNum!\r\n) else (\r\n  set /a fyYear=!yearNum! - 1\r\n)\r\n`;
-    b += `set fyYearStr=!fyYear!\r\nset FY=FY!fyYearStr:~-2!\r\n\r\n`;
-    b += `echo ----------------------------------------\r\necho FY=!FY!    PERIOD=!PERIOD!\r\necho ----------------------------------------\r\n\r\n`;
+  if (hasDim1) {
+    // Loop dim value definitions
+    b += `rem --- Loop dimension values ---\r\n`;
+    b += `set DIM1_VALUES=${dim1.values}\r\n`;
+    if (hasDim2) b += `set DIM2_VALUES=${dim2.values}\r\n`;
+    b += `\r\n`;
 
-    const innerOpen  = (hasScenario ? `for %%C in (%SCENARIOS%) do (\r\n  set SCENARIO=%%C\r\n` : '')
-                     + (hasSbu      ? `  for %%S in (%SBUS%) do (\r\n  set SBU=%%S\r\n` : '');
-    const innerClose = (hasSbu      ? `  )\r\n` : '')
-                     + (hasScenario ? `)\r\n` : '');
-    const indent = hasScenario || hasSbu ? '  ' : '';
-
-    if (innerOpen) b += innerOpen;
-
-    let label = '!FY![!PERIOD!]';
-    if (hasScenario) label += '[%%C]';
-    if (hasSbu)      label += '[%%S]';
-
-    let respFile = 'logs/response_!currentYM!';
-    if (hasScenario) respFile += '_%%C';
-    if (hasSbu)      respFile += '_%%S';
-    respFile += '.xml';
-
-    b += `${indent}echo   [${label}] Processing...\r\n\r\n`;
-    b += `${indent}java -Xms4096m -Xmx8192m -jar ../${jarFilename(c)} ^\r\n`;
-    b += `${indent}  -url %URL% -user %USER% -pass %PW% ^\r\n`;
-    b += `${indent}  -external true < request.xml > ${respFile} 2>nul\r\n`;
-    b += `${indent}set RC=!ERRORLEVEL!\r\n\r\n`;
-
-    b += genRcCheck(c, indent, label, respFile, isExport, isImport, isFull, hasScenario, hasSbu);
-
-    if (innerClose) b += innerClose;
-
-    b += `\r\nrem --- Increment month ---\r\n`;
-    b += `set /a nextMonth=!monthNum! + 1\r\nset /a nextYear=!yearNum!\r\n`;
-    b += `if !nextMonth! GTR 12 (\r\n  set /a nextMonth=1\r\n  set /a nextYear+=1\r\n)\r\n`;
-    b += `if !nextMonth! LSS 10 (set nextMonthStr=0!nextMonth!) else (set nextMonthStr=!nextMonth!)\r\n`;
-    b += `set currentYM=!nextYear!!nextMonthStr!\r\n\r\n`;
-    b += `if !currentYM! LEQ %endYM% goto loop\r\n\r\n`;
+    b += `rem --- Main loop ---\r\n`;
+    b += `for %%A in (%DIM1_VALUES%) do (\r\n`;
+    b += `  set ${dim1Var}=%%A\r\n`;
+    if (hasDim2) {
+      b += `  for %%B in (%DIM2_VALUES%) do (\r\n`;
+      b += `    set ${dim2Var}=%%B\r\n`;
+      b += genLoopBody(c, '    ', '[%%A][%%B]', 'logs/response_%%A_%%B.xml', '%%A_%%B', jar, isExport, isImportValues, isFull);
+      b += `  )\r\n`;
+    } else {
+      b += genLoopBody(c, '  ', '[%%A]', 'logs/response_%%A.xml', '%%A', jar, isExport, isImportValues, isFull);
+    }
+    b += `)\r\n\r\n`;
 
   } else {
+    // Single execution (no loop)
     b += `echo Processing...\r\n\r\n`;
-    b += `java -Xms4096m -Xmx8192m -jar ../${jarFilename(c)} ^\r\n`;
+    b += `java -Xms4096m -Xmx8192m -jar ..\\${jar} ^\r\n`;
     b += `  -url %URL% -user %USER% -pass %PW% ^\r\n`;
     const respOut = isImportValues ? 'response/response.xml' : 'logs/response.xml';
     b += `  -external true < request.xml > ${respOut} 2>nul\r\n`;
@@ -343,69 +302,91 @@ function genRunBat(c) {
   return b;
 }
 
-function genRcCheck(c, indent, label, respFile, isExport, isImport, isFull, hasScenario, hasSbu) {
+function genLoopBody(c, indent, label, respFile, csvSuffix, jar, isExport, isImportValues, isFull) {
   let b = '';
-  let csvSuffix = '!currentYM!';
-  if (hasScenario) csvSuffix += '_%%C';
-  if (hasSbu)      csvSuffix += '_%%S';
+  b += `${indent}echo   ${label} Processing...\r\n`;
 
+  if (isImportValues) {
+    const ei = indent + '  ';
+    b += `${indent}if exist "src\\${csvSuffix}.csv" (\r\n`;
+    b += `${ei}copy /y "src\\${csvSuffix}.csv" "src\\input.csv" >nul\r\n`;
+    b += `${ei}java -Xms4096m -Xmx8192m -jar ..\\${jar} ^\r\n`;
+    b += `${ei}  -url %URL% -user %USER% -pass %PW% ^\r\n`;
+    b += `${ei}  -external true < request.xml > ${respFile} 2>nul\r\n`;
+    b += `${ei}set RC=!ERRORLEVEL!\r\n`;
+    b += genRcCheckLoop(isFull, ei, label, csvSuffix, isExport);
+    b += `${indent}) else (\r\n`;
+    b += `${indent}  echo   ${label} SKIP: src\\${csvSuffix}.csv not found\r\n`;
+    if (isFull) b += `${indent}  echo INFO:    ${label} src\\${csvSuffix}.csv not found >> "%SUMMARY_LOG%"\r\n`;
+    b += `${indent})\r\n`;
+  } else {
+    b += `${indent}java -Xms4096m -Xmx8192m -jar ..\\${jar} ^\r\n`;
+    b += `${indent}  -url %URL% -user %USER% -pass %PW% ^\r\n`;
+    b += `${indent}  -external true < request.xml > ${respFile} 2>nul\r\n`;
+    b += `${indent}set RC=!ERRORLEVEL!\r\n`;
+    b += genRcCheckLoop(isFull, indent, label, csvSuffix, isExport);
+  }
+
+  return b;
+}
+
+function genRcCheckLoop(isFull, indent, label, csvSuffix, isExport) {
+  let b = '';
   if (isFull) {
     b += `${indent}if !RC! EQU 1 (\r\n`;
     b += `${indent}  set /a ERR_COUNT+=1\r\n`;
-    b += `${indent}  echo   [${label}] WARNING: requester returned RC=1\r\n`;
-    b += `${indent}  echo WARNING: [${label}] requester RC=1 >> "%SUMMARY_LOG%"\r\n`;
+    b += `${indent}  echo   ${label} WARNING: RC=1\r\n`;
+    b += `${indent}  echo WARNING: ${label} RC=1 >> "%SUMMARY_LOG%"\r\n`;
     b += `${indent}) else if !RC! EQU 2 (\r\n`;
     b += `${indent}  set /a ERR_COUNT+=1\r\n`;
-    b += `${indent}  echo   [${label}] ERROR: requester returned RC=2\r\n`;
-    b += `${indent}  echo ERROR:   [${label}] requester RC=2 >> "%SUMMARY_LOG%"\r\n`;
+    b += `${indent}  echo   ${label} ERROR: RC=2\r\n`;
+    b += `${indent}  echo ERROR:   ${label} RC=2 >> "%SUMMARY_LOG%"\r\n`;
     b += `${indent}) else if !RC! EQU 4 (\r\n`;
     b += `${indent}  set /a ERR_COUNT+=1\r\n`;
-    b += `${indent}  echo   [${label}] FAILED: requester returned RC=4\r\n`;
-    b += `${indent}  echo FAILED:  [${label}] requester RC=4 >> "%SUMMARY_LOG%"\r\n`;
+    b += `${indent}  echo   ${label} FAILED: RC=4\r\n`;
+    b += `${indent}  echo FAILED:  ${label} RC=4 >> "%SUMMARY_LOG%"\r\n`;
     b += `${indent}) else if !RC! EQU 8 (\r\n`;
     b += `${indent}  set /a ERR_COUNT+=1\r\n`;
-    b += `${indent}  echo   [${label}] ABORTED: requester returned RC=8\r\n`;
-    b += `${indent}  echo ABORTED: [${label}] requester RC=8 >> "%SUMMARY_LOG%"\r\n`;
+    b += `${indent}  echo   ${label} ABORTED: RC=8\r\n`;
+    b += `${indent}  echo ABORTED: ${label} RC=8 >> "%SUMMARY_LOG%"\r\n`;
     b += `${indent}) else if !RC! NEQ 0 (\r\n`;
     b += `${indent}  set /a ERR_COUNT+=1\r\n`;
-    b += `${indent}  echo   [${label}] WARNING: requester returned unknown RC=!RC!\r\n`;
-    b += `${indent}  echo WARNING: [${label}] requester unknown RC=!RC! >> "%SUMMARY_LOG%"\r\n`;
+    b += `${indent}  echo   ${label} WARNING: unknown RC=!RC!\r\n`;
+    b += `${indent}  echo WARNING: ${label} unknown RC=!RC! >> "%SUMMARY_LOG%"\r\n`;
     b += `${indent}) else (\r\n`;
-
     if (isExport) {
       b += `${indent}  if exist csv\\output.csv (\r\n`;
       b += `${indent}    for %%F in (csv\\output.csv) do set csvSize=%%~zF\r\n`;
       b += `${indent}    if !csvSize! LEQ 1 (\r\n`;
       b += `${indent}      del csv\\output.csv\r\n`;
-      b += `${indent}      echo   [${label}] INFO: output.csv is empty, skipped\r\n`;
-      b += `${indent}      echo INFO:    [${label}] output.csv was empty >> "%SUMMARY_LOG%"\r\n`;
+      b += `${indent}      echo   ${label} INFO: output.csv is empty, skipped\r\n`;
+      b += `${indent}      echo INFO:    ${label} output.csv was empty >> "%SUMMARY_LOG%"\r\n`;
       b += `${indent}    ) else (\r\n`;
       b += `${indent}      ren csv\\output.csv ${csvSuffix}.csv\r\n`;
       b += `${indent}      set /a OK_COUNT+=1\r\n`;
-      b += `${indent}      echo   [${label}] Done -^> csv\\${csvSuffix}.csv\r\n`;
-      b += `${indent}      echo OK:      [${label}] csv\\${csvSuffix}.csv >> "%SUMMARY_LOG%"\r\n`;
+      b += `${indent}      echo   ${label} Done -^> csv\\${csvSuffix}.csv\r\n`;
+      b += `${indent}      echo OK:      ${label} csv\\${csvSuffix}.csv >> "%SUMMARY_LOG%"\r\n`;
       b += `${indent}    )\r\n`;
       b += `${indent}  ) else (\r\n`;
       b += `${indent}    set /a ERR_COUNT+=1\r\n`;
-      b += `${indent}    echo   [${label}] WARNING: output.csv not found\r\n`;
-      b += `${indent}    echo WARNING: [${label}] output.csv not found >> "%SUMMARY_LOG%"\r\n`;
+      b += `${indent}    echo   ${label} WARNING: output.csv not found\r\n`;
+      b += `${indent}    echo WARNING: ${label} output.csv not found >> "%SUMMARY_LOG%"\r\n`;
       b += `${indent}  )\r\n`;
     } else {
       b += `${indent}  set /a OK_COUNT+=1\r\n`;
-      b += `${indent}  echo   [${label}] Done\r\n`;
-      b += `${indent}  echo OK:      [${label}] >> "%SUMMARY_LOG%"\r\n`;
+      b += `${indent}  echo   ${label} Done\r\n`;
+      b += `${indent}  echo OK:      ${label} >> "%SUMMARY_LOG%"\r\n`;
     }
-
-    b += `${indent})\r\n\r\n`;
+    b += `${indent})\r\n`;
   } else {
     b += `${indent}if !RC! NEQ 0 (\r\n`;
-    b += `${indent}  echo   [${label}] ERROR: RC=!RC!\r\n`;
+    b += `${indent}  echo   ${label} ERROR: RC=!RC!\r\n`;
     b += `${indent}) else (\r\n`;
     if (isExport) {
       b += `${indent}  if exist csv\\output.csv ren csv\\output.csv ${csvSuffix}.csv\r\n`;
     }
-    b += `${indent}  echo   [${label}] Done\r\n`;
-    b += `${indent})\r\n\r\n`;
+    b += `${indent}  echo   ${label} Done\r\n`;
+    b += `${indent})\r\n`;
   }
   return b;
 }

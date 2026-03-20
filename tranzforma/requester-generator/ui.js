@@ -85,9 +85,10 @@ function populateFromApd() {
   // TRANSLATION_TABLE select
   fillSelect('p-tt', apdData.translationTables);
 
-  // Scenario loop: pre-populate list from APD
-  if (apdData.scenarioMembers.length) {
-    document.getElementById('scenario-list').value = apdData.scenarioMembers.join(' ');
+  // Populate APD dimension datalist for loop dim suggestions
+  const datalist = document.getElementById('apd-dim-list');
+  if (datalist) {
+    datalist.innerHTML = apdData.dimensions.map(d => `<option value="${d}">`).join('');
   }
 
   // PARTICIPANT hint based on application type
@@ -207,11 +208,16 @@ function getConfig() {
     }),
     scriptPovText:        document.getElementById('script-pov-text')?.value || '',
     exportDimFmtVer:      document.querySelector('input[name=exportDimFmtVer]:checked')?.value || 'omit',
-    monthLoop:            document.querySelector('input[name=monthLoop]:checked').value,
-    loopScenario:         document.getElementById('loop-scenario').checked,
-    scenarioList:         document.getElementById('scenario-list').value.trim(),
-    loopSbu:              document.getElementById('loop-sbu').checked,
-    sbuList:              document.getElementById('sbu-list').value.trim(),
+    loopDims: (() => {
+      const dims = [];
+      const d1name = document.getElementById('loop-dim1-name').value.trim();
+      const d1vals = document.getElementById('loop-dim1-values').value.trim();
+      if (d1name && d1vals) dims.push({ dim: d1name, values: d1vals });
+      const d2name = document.getElementById('loop-dim2-name').value.trim();
+      const d2vals = document.getElementById('loop-dim2-values').value.trim();
+      if (d2name && d2vals) dims.push({ dim: d2name, values: d2vals });
+      return dims;
+    })(),
     errLevel:             document.querySelector('input[name=errLevel]:checked').value,
   };
 }
@@ -263,9 +269,17 @@ function buildSummary() {
     rows.push(['TRANSLATION_TABLE', c.pTT || '(未設定)']);
   }
 
-  rows.push(['月ループ',           c.monthLoop === 'yes' ? 'あり' : 'なし']);
-  rows.push(['シナリオループ',     c.loopScenario ? c.scenarioList : 'なし']);
-  rows.push(['SBU ループ',         c.loopSbu ? c.sbuList : 'なし']);
+  if (c.loopDims && c.loopDims.length > 0) {
+    const dim1 = c.loopDims[0];
+    const dim2 = c.loopDims[1];
+    rows.push(['ループ Dim1', `${dim1.dim} = ${dim1.values}`]);
+    if (dim2) rows.push(['ループ Dim2', `${dim2.dim} = ${dim2.values}`]);
+    const count1 = dim1.values.trim().split(/\s+/).length;
+    const count2 = dim2 ? dim2.values.trim().split(/\s+/).length : 1;
+    rows.push(['実行回数', `${count1 * count2}回`]);
+  } else {
+    rows.push(['ループ', 'なし（1回実行）']);
+  }
   rows.push(['エラーハンドリング', c.errLevel === 'full' ? 'フル' : 'ミニマル']);
 
   const tbl = document.getElementById('summary-table');
@@ -318,11 +332,13 @@ async function generateZip() {
 
   const isExport = c.reqType === 'EXPORT_VALUES';
   const isImport = ['IMPORT_VALUES', 'UPDATE_DIMENSION', 'IMPORT_TRANSLATION_TABLE'].includes(c.reqType);
+  const isBackup = c.reqType === 'BACKUP_APPLICATION';
   if (isExport) proc.file('csv/.gitkeep', '');
   if (isImport) {
     proc.file('src/.gitkeep', '');
     proc.file('response/.gitkeep', '');
   }
+  if (isBackup) proc.file('response/.gitkeep', '');
 
   const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
   const a = document.createElement('a');
@@ -367,20 +383,9 @@ document.addEventListener('DOMContentLoaded', () => {
     row.querySelector('.pov-val-wrap').classList.toggle('hidden', e.target.value === 'runtime');
   });
 
-  // Step 4: month loop toggle
-  document.querySelectorAll('input[name=monthLoop]').forEach(r => {
-    r.addEventListener('change', () => {
-      const v = document.querySelector('input[name=monthLoop]:checked').value;
-      document.getElementById('sub-loop-fields').classList.toggle('hidden', v === 'no');
-    });
-  });
-
-  // Step 4: scenario / SBU checkboxes
-  document.getElementById('loop-scenario').addEventListener('change', function () {
-    document.getElementById('scenario-list-field').classList.toggle('hidden', !this.checked);
-  });
-  document.getElementById('loop-sbu').addEventListener('change', function () {
-    document.getElementById('sbu-list-field').classList.toggle('hidden', !this.checked);
+  // Step 4: show Dim2 block when Dim1 name has input
+  document.getElementById('loop-dim1-name').addEventListener('input', function () {
+    document.getElementById('loop-dim2-block').classList.toggle('hidden', !this.value.trim());
   });
 
 });

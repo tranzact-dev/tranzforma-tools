@@ -532,41 +532,41 @@ details.opt-section > .opt-content {
   <div id="step-4" class="hidden">
     <div class="card">
       <h2>ループ設定</h2>
+
+      <!-- Dim1 (outer loop) -->
       <div class="field">
-        <label>月ループ</label>
-        <div class="radio-group">
-          <label><input type="radio" name="monthLoop" value="yes" disabled>
-            <div><div class="label-title">あり</div><div class="label-desc">FY / PERIOD を月ごとに計算してリクエストに渡す</div></div>
-          </label>
-          <label><input type="radio" name="monthLoop" value="no" checked>
-            <div><div class="label-title">なし</div><div class="label-desc">月ループなし（1回実行）</div></div>
-          </label>
+        <label>Dim1（外側ループ）</label>
+        <div class="hint">ループしない場合は空欄のまま次へ進んでください。</div>
+        <div class="sub-field">
+          <div class="field">
+            <label>ディメンション名</label>
+            <input type="text" id="loop-dim1-name" list="apd-dim-list" placeholder="例: #SCENARIO">
+          </div>
+          <div class="field">
+            <label>値リスト（スペース区切り）</label>
+            <input type="text" id="loop-dim1-values" placeholder="例: ACT BUD PLAN">
+          </div>
         </div>
       </div>
 
-      <div id="sub-loop-fields">
-        <div class="field" style="margin-top:14px;">
-          <label>追加ループ軸</label>
-          <div class="hint">月ループの内側でさらに繰り返す軸を選択（複数可）</div>
-          <div class="check-group">
-            <label><input type="checkbox" id="loop-scenario" disabled><span>シナリオ（SCENARIO）</span></label>
-            <label><input type="checkbox" id="loop-sbu" disabled><span>SBU</span></label>
-          </div>
-        </div>
-        <div id="scenario-list-field" class="sub-field hidden">
+      <!-- Dim2 (inner loop) - shown when Dim1 has input -->
+      <div id="loop-dim2-block" class="field hidden">
+        <label>Dim2（内側ループ）※任意</label>
+        <div class="hint">Dim1 の各値に対してさらにループします。空欄の場合は Dim1 のみのループになります。</div>
+        <div class="sub-field">
           <div class="field">
-            <label>シナリオリスト（スペース区切り）</label>
-            <div class="hint">APD のシナリオを読み込み済みです。必要に応じて編集してください。</div>
-            <input type="text" id="scenario-list" placeholder="例: ACT PLAN RES BUD FCT">
+            <label>ディメンション名</label>
+            <input type="text" id="loop-dim2-name" list="apd-dim-list" placeholder="例: #PERIOD">
           </div>
-        </div>
-        <div id="sbu-list-field" class="sub-field hidden">
           <div class="field">
-            <label>SBU リスト（スペース区切り）</label>
-            <input type="text" id="sbu-list" placeholder="例: ZDV01 ZDV02 ZDV03">
+            <label>値リスト（スペース区切り）</label>
+            <input type="text" id="loop-dim2-values" placeholder="例: M04 M05 M06">
           </div>
         </div>
       </div>
+
+      <!-- datalist for APD dimension suggestions -->
+      <datalist id="apd-dim-list"></datalist>
     </div>
 
     <div class="btn-row">
