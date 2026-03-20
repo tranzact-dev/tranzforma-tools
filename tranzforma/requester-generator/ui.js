@@ -162,10 +162,12 @@ function populatePovRows(dims) {
 
 function tryGoStep4() {
   const errors = [];
+  const loopRows = [];
   document.querySelectorAll('#pov-list .pov-row').forEach(row => {
     const mode = row.querySelector('input[type=radio]:checked')?.value;
     if (mode !== 'loop') return;
     const dim = row.dataset.dim;
+    loopRows.push(dim);
     const raw = row.querySelector('.pov-loop-vals')?.value.trim() || '';
     const parts = raw.split(',');
     if (parts.some(p => p.trim() === '')) {
@@ -176,6 +178,9 @@ function tryGoStep4() {
       errors.push(`${dim}: loop requires 2 or more values — use fixed mode for a single value`);
     }
   });
+  if (loopRows.length > 2) {
+    errors.unshift(`too many loop dimensions (${loopRows.length}) — maximum is 2`);
+  }
   if (errors.length > 0) {
     alert('Loop setting error:\n\n' + errors.join('\n'));
     return;
