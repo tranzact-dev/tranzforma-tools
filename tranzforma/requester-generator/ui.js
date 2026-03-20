@@ -158,6 +158,31 @@ function populatePovRows(dims) {
   }).join('');
 }
 
+// ── Step 3 validation ────────────────────────────────────────────────
+
+function tryGoStep4() {
+  const errors = [];
+  document.querySelectorAll('#pov-list .pov-row').forEach(row => {
+    const mode = row.querySelector('input[type=radio]:checked')?.value;
+    if (mode !== 'loop') return;
+    const dim = row.dataset.dim;
+    const raw = row.querySelector('.pov-loop-vals')?.value.trim() || '';
+    const parts = raw.split(',');
+    if (parts.some(p => p.trim() === '')) {
+      errors.push(`${dim}: empty element found (e.g. "ACT,,BUD")`);
+      return;
+    }
+    if (parts.filter(Boolean).length < 2) {
+      errors.push(`${dim}: loop requires 2 or more values — use fixed mode for a single value`);
+    }
+  });
+  if (errors.length > 0) {
+    alert('Loop setting error:\n\n' + errors.join('\n'));
+    return;
+  }
+  goStep(4);
+}
+
 // ── Request type UI ──────────────────────────────────────────────────
 
 function updateReqTypeUI() {
