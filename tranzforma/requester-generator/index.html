@@ -144,7 +144,8 @@
   font: 400 15px var(--sans); color: var(--text2); cursor: pointer;
 }
 .pov-mode-label input[type=radio] { accent-color: var(--accent); }
-.pov-val-wrap { display: flex; align-items: center; }
+.pov-val-wrap, .pov-loop-wrap { display: flex; align-items: center; }
+.pov-loop-vals { min-width: 220px; }
 .pov-val {
   padding: 6px 12px;
   background: var(--bg); border: 1px solid var(--border);
@@ -238,9 +239,8 @@ details.opt-section > .opt-content {
     <div class="step active" id="step-ind-1">1. APD</div>
     <div class="step"        id="step-ind-2">2. 接続・実行</div>
     <div class="step"        id="step-ind-3">3. リクエスト</div>
-    <div class="step"        id="step-ind-4">4. ループ</div>
-    <div class="step"        id="step-ind-5">5. オプション</div>
-    <div class="step"        id="step-ind-6">6. 生成</div>
+    <div class="step"        id="step-ind-4">4. オプション</div>
+    <div class="step"        id="step-ind-5">5. 生成</div>
   </div>
 
   <!-- ══════════ STEP 1: APD ══════════ -->
@@ -528,55 +528,8 @@ details.opt-section > .opt-content {
     </div>
   </div>
 
-  <!-- ══════════ STEP 4: ループ ══════════ -->
+  <!-- ══════════ STEP 4: オプション ══════════ -->
   <div id="step-4" class="hidden">
-    <div class="card">
-      <h2>ループ設定</h2>
-
-      <!-- Dim1 (outer loop) -->
-      <div class="field">
-        <label>Dim1（外側ループ）</label>
-        <div class="hint">ループしない場合は空欄のまま次へ進んでください。</div>
-        <div class="sub-field">
-          <div class="field">
-            <label>ディメンション名</label>
-            <input type="text" id="loop-dim1-name" list="apd-dim-list" placeholder="例: #SCENARIO">
-          </div>
-          <div class="field">
-            <label>値リスト（スペース区切り）</label>
-            <input type="text" id="loop-dim1-values" placeholder="例: ACT BUD PLAN">
-          </div>
-        </div>
-      </div>
-
-      <!-- Dim2 (inner loop) - shown when Dim1 has input -->
-      <div id="loop-dim2-block" class="field hidden">
-        <label>Dim2（内側ループ）※任意</label>
-        <div class="hint">Dim1 の各値に対してさらにループします。空欄の場合は Dim1 のみのループになります。</div>
-        <div class="sub-field">
-          <div class="field">
-            <label>ディメンション名</label>
-            <input type="text" id="loop-dim2-name" list="apd-dim-list" placeholder="例: #PERIOD">
-          </div>
-          <div class="field">
-            <label>値リスト（スペース区切り）</label>
-            <input type="text" id="loop-dim2-values" placeholder="例: M04 M05 M06">
-          </div>
-        </div>
-      </div>
-
-      <!-- datalist for APD dimension suggestions -->
-      <datalist id="apd-dim-list"></datalist>
-    </div>
-
-    <div class="btn-row">
-      <button class="btn btn-back" onclick="goStep(3)">← 戻る</button>
-      <button class="btn btn-next" onclick="goStep(5)">次へ →</button>
-    </div>
-  </div>
-
-  <!-- ══════════ STEP 5: オプション ══════════ -->
-  <div id="step-5" class="hidden">
     <div class="card">
       <h2>エラーハンドリング</h2>
       <div class="field">
@@ -598,13 +551,13 @@ details.opt-section > .opt-content {
     </div>
 
     <div class="btn-row">
-      <button class="btn btn-back" onclick="goStep(4)">← 戻る</button>
-      <button class="btn btn-next" onclick="goStep(6)">次へ →</button>
+      <button class="btn btn-back" onclick="goStep(3)">← 戻る</button>
+      <button class="btn btn-next" onclick="goStep(5)">次へ →</button>
     </div>
   </div>
 
-  <!-- ══════════ STEP 6: 生成 ══════════ -->
-  <div id="step-6" class="hidden">
+  <!-- ══════════ STEP 5: 生成 ══════════ -->
+  <div id="step-5" class="hidden">
     <div class="card">
       <h2>設定確認</h2>
       <table class="summary-table" id="summary-table"></table>
@@ -630,7 +583,7 @@ details.opt-section > .opt-content {
       </div>
     </div>
     <div class="btn-row">
-      <button class="btn btn-back" onclick="goStep(5)">← 戻る</button>
+      <button class="btn btn-back" onclick="goStep(4)">← 戻る</button>
     </div>
   </div>
 

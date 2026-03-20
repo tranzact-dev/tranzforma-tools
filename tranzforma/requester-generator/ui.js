@@ -15,7 +15,7 @@ function goStep(n) {
   document.getElementById('step-ind-' + n).classList.add('active');
   document.getElementById('step-ind-' + n).classList.remove('done');
 
-  if (n === 6) buildSummary();
+  if (n === 5) buildSummary();
   window.scrollTo(0, 0);
 }
 
@@ -85,12 +85,6 @@ function populateFromApd() {
   // TRANSLATION_TABLE select
   fillSelect('p-tt', apdData.translationTables);
 
-  // Populate APD dimension datalist for loop dim suggestions
-  const datalist = document.getElementById('apd-dim-list');
-  if (datalist) {
-    datalist.innerHTML = apdData.dimensions.map(d => `<option value="${d}">`).join('');
-  }
-
   // PARTICIPANT hint based on application type
   const hint = document.getElementById('participant-hint');
   if (hint) {
@@ -153,6 +147,12 @@ function populatePovRows(dims) {
             <input type="radio" name="pov-mode-${sid}" value="fixed"> 固定値:
           </label>
           <div class="pov-val-wrap hidden">${buildPovValueInput(d)}</div>
+          <label class="pov-mode-label">
+            <input type="radio" name="pov-mode-${sid}" value="loop"> ループ:
+          </label>
+          <div class="pov-loop-wrap hidden">
+            <input type="text" class="pov-loop-vals pov-val" placeholder="例: ACT BUD PLAN">
+          </div>
         </div>
       </div>`;
   }).join('');
@@ -179,6 +179,18 @@ function updateReqTypeUI() {
 // ── Config collection ────────────────────────────────────────────────
 
 function getConfig() {
+  const formPovDims = Array.from(document.querySelectorAll('#pov-list .pov-row')).map(row => {
+    const dim      = row.dataset.dim;
+    const mode     = row.querySelector('input[type=radio]:checked')?.value || 'runtime';
+    const fixedVal = row.querySelector('.pov-val-wrap .pov-val');
+    const loopVals = row.querySelector('.pov-loop-vals');
+    return {
+      dim,
+      mode,
+      value:  mode === 'fixed' ? (fixedVal ? fixedVal.value : '') : '',
+      values: mode === 'loop'  ? (loopVals  ? loopVals.value.trim() : '') : '',
+    };
+  });
   return {
     applicationName:      apdData ? apdData.application : '',
     schemaVersion:        apdData ? apdData.schemaVersion : '',
@@ -200,24 +212,10 @@ function getConfig() {
     importFormat:         document.querySelector('input[name=importFormat]:checked')?.value || 'omit',
     importNewline:        document.querySelector('input[name=importNewline]:checked')?.value || 'omit',
     importSeverity:       document.querySelector('input[name=importSeverity]:checked')?.value || 'INFO',
-    formPovDims: Array.from(document.querySelectorAll('#pov-list .pov-row')).map(row => {
-      const dim  = row.dataset.dim;
-      const mode = row.querySelector('input[type=radio]:checked')?.value || 'runtime';
-      const val  = row.querySelector('.pov-val');
-      return { dim, mode, value: mode === 'fixed' ? (val ? val.value : '') : '' };
-    }),
+    formPovDims,
+    loopDims:             formPovDims.filter(p => p.mode === 'loop' && p.values).map(p => ({ dim: p.dim, values: p.values })),
     scriptPovText:        document.getElementById('script-pov-text')?.value || '',
     exportDimFmtVer:      document.querySelector('input[name=exportDimFmtVer]:checked')?.value || 'omit',
-    loopDims: (() => {
-      const dims = [];
-      const d1name = document.getElementById('loop-dim1-name').value.trim();
-      const d1vals = document.getElementById('loop-dim1-values').value.trim();
-      if (d1name && d1vals) dims.push({ dim: d1name, values: d1vals });
-      const d2name = document.getElementById('loop-dim2-name').value.trim();
-      const d2vals = document.getElementById('loop-dim2-values').value.trim();
-      if (d2name && d2vals) dims.push({ dim: d2name, values: d2vals });
-      return dims;
-    })(),
     errLevel:             document.querySelector('input[name=errLevel]:checked').value,
   };
 }
@@ -244,9 +242,11 @@ function buildSummary() {
     if (c.exportQuoteStyle !== 'omit')  rows.push(['QUOTE_STYLE', c.exportQuoteStyle]);
   }
   if (['EXPORT_VALUES', 'IMPORT_VALUES', 'CALCULATE_BY_FORM'].includes(c.reqType) && c.formPovDims && c.formPovDims.length) {
-    const povDesc = c.formPovDims.map(p =>
-      p.mode === 'fixed' ? `${p.dim}=${p.value}` : `${p.dim}(実行時)`
-    ).join(', ');
+    const povDesc = c.formPovDims.map(p => {
+      if (p.mode === 'fixed') return `${p.dim}=${p.value}`;
+      if (p.mode === 'loop')  return `${p.dim}(ループ: ${p.values})`;
+      return `${p.dim}(実行時)`;
+    }).join(', ');
     rows.push(['POV', povDesc]);
   }
   if (c.reqType === 'IMPORT_VALUES') {
@@ -270,15 +270,8 @@ function buildSummary() {
   }
 
   if (c.loopDims && c.loopDims.length > 0) {
-    const dim1 = c.loopDims[0];
-    const dim2 = c.loopDims[1];
-    rows.push(['ループ Dim1', `${dim1.dim} = ${dim1.values}`]);
-    if (dim2) rows.push(['ループ Dim2', `${dim2.dim} = ${dim2.values}`]);
-    const count1 = dim1.values.trim().split(/\s+/).length;
-    const count2 = dim2 ? dim2.values.trim().split(/\s+/).length : 1;
-    rows.push(['実行回数', `${count1 * count2}回`]);
-  } else {
-    rows.push(['ループ', 'なし（1回実行）']);
+    const count = c.loopDims.reduce((acc, d) => acc * d.values.trim().split(/\s+/).length, 1);
+    rows.push(['実行回数', `${count}回`]);
   }
   rows.push(['エラーハンドリング', c.errLevel === 'full' ? 'フル' : 'ミニマル']);
 
@@ -380,12 +373,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (e.target.type !== 'radio') return;
     const row = e.target.closest('.pov-row');
     if (!row) return;
-    row.querySelector('.pov-val-wrap').classList.toggle('hidden', e.target.value === 'runtime');
-  });
-
-  // Step 4: show Dim2 block when Dim1 name has input
-  document.getElementById('loop-dim1-name').addEventListener('input', function () {
-    document.getElementById('loop-dim2-block').classList.toggle('hidden', !this.value.trim());
+    const mode = e.target.value;
+    row.querySelector('.pov-val-wrap').classList.toggle('hidden', mode !== 'fixed');
+    row.querySelector('.pov-loop-wrap').classList.toggle('hidden', mode !== 'loop');
   });
 
 });

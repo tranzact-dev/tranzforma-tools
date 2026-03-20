@@ -67,12 +67,6 @@ function genRequestXml(c) {
   const apl = '%APL%';
   let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<requests>\n`;
 
-  // Helper: emit loop dim POV parameters
-  const loopDimPovs = (indent) => (c.loopDims || []).map(d => {
-    const varName = d.dim.replace(/^#/, '');
-    return `${indent}<parameter name="POV" key="${d.dim}" value="%${varName}%"/>\n`;
-  }).join('');
-
   if (c.reqType === 'EXPORT_VALUES') {
     xml += `  <request type="EXPORT_VALUES" desc="Export ${c.pForm || 'FORM_LABEL'}">\n`;
     xml += `    <parameters>\n`;
@@ -83,7 +77,6 @@ function genRequestXml(c) {
       const varName = pov.dim.replace(/^#/, '');
       xml += `      <parameter name="POV" key="${pov.dim}" value="%${varName}%"/>\n`;
     }
-    xml += loopDimPovs('      ');
     if (c.exportFormat !== 'omit')     xml += `      <parameter name="FORMAT" value="${c.exportFormat}"/>\n`;
     if (c.exportNewline !== 'omit')    xml += `      <parameter name="NEWLINE_STYLE" value="${c.exportNewline}"/>\n`;
     if (c.exportQuoteStyle !== 'omit') xml += `      <parameter name="QUOTE_STYLE" value="${c.exportQuoteStyle}"/>\n`;
@@ -101,7 +94,7 @@ function genRequestXml(c) {
       const varName = pov.dim.replace(/^#/, '');
       xml += `      <parameter name="POV" key="${pov.dim}" value="%${varName}%"/>\n`;
     }
-    xml += loopDimPovs('      ');
+
     if (c.importFormat !== 'omit')   xml += `      <parameter name="FORMAT" value="${c.importFormat}"/>\n`;
     if (c.importNewline !== 'omit')  xml += `      <parameter name="NEWLINE_STYLE" value="${c.importNewline}"/>\n`;
     if (c.importSeverity !== 'omit') xml += `      <parameter name="MIN_SEVERITY" value="${c.importSeverity}"/>\n`;
@@ -119,7 +112,7 @@ function genRequestXml(c) {
       const varName = pov.dim.replace(/^#/, '');
       xml += `      <parameter name="POV" key="${pov.dim}" value="%${varName}%"/>\n`;
     }
-    xml += loopDimPovs('      ');
+
     xml += `    </parameters>\n`;
     xml += genContents(c.reqType);
     xml += `  </request>\n`;
@@ -159,7 +152,7 @@ function genRequestXml(c) {
     xml += `      <parameter name="APPLICATION" value="${apl}"/>\n`;
     xml += `      <parameter name="SCRIPT" value="${c.pScript || 'SCRIPT_LABEL'}"/>\n`;
     xml += `      <parameter name="PARTICIPANT" value="${c.pScriptParticipant || 'ADMIN'}"/>\n`;
-    xml += loopDimPovs('      ');
+
     for (const p of parsePovText(c.scriptPovText)) {
       xml += `      <parameter name="POV" key="${p.key}" value="${p.value}"/>\n`;
     }
@@ -228,10 +221,11 @@ function genRunBat(c) {
 
   // POV variable setup (form-based types)
   const isFormBased = ['EXPORT_VALUES', 'IMPORT_VALUES', 'CALCULATE_BY_FORM'].includes(c.reqType);
-  const hasPov = isFormBased && c.formPovDims && c.formPovDims.length > 0;
+  const hasPov = isFormBased && c.formPovDims && c.formPovDims.some(p => p.mode !== 'loop');
   if (hasPov) {
     b += `rem --- POV parameters ---\r\n`;
     for (const pov of c.formPovDims) {
+      if (pov.mode === 'loop') continue;  // set by for loop
       const varName = pov.dim.replace(/^#/, '');
       if (pov.mode === 'fixed') {
         b += `set ${varName}=${pov.value}\r\n`;
