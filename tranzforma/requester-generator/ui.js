@@ -151,7 +151,7 @@ function populatePovRows(dims) {
             <input type="radio" name="pov-mode-${sid}" value="loop"> ループ:
           </label>
           <div class="pov-loop-wrap hidden">
-            <input type="text" class="pov-loop-vals pov-val" placeholder="例: ACT BUD PLAN">
+            <input type="text" class="pov-loop-vals pov-val" placeholder="例: ACT,BUD,PLAN">
           </div>
         </div>
       </div>`;
@@ -270,7 +270,7 @@ function buildSummary() {
   }
 
   if (c.loopDims && c.loopDims.length > 0) {
-    const count = c.loopDims.reduce((acc, d) => acc * d.values.trim().split(/\s+/).length, 1);
+    const count = c.loopDims.reduce((acc, d) => acc * d.values.split(/\s*,\s*/).filter(Boolean).length, 1);
     rows.push(['実行回数', `${count}回`]);
   }
   rows.push(['エラーハンドリング', c.errLevel === 'full' ? 'フル' : 'ミニマル']);

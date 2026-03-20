@@ -250,10 +250,11 @@ function genRunBat(c) {
   const jar = jarFilename(c);
 
   if (hasDim1) {
-    // Loop dim value definitions
+    // Loop dim value definitions (normalize comma-separated, strip spaces)
+    const normVals = v => v.split(/\s*,\s*/).filter(Boolean).join(',');
     b += `rem --- Loop dimension values ---\r\n`;
-    b += `set DIM1_VALUES=${dim1.values}\r\n`;
-    if (hasDim2) b += `set DIM2_VALUES=${dim2.values}\r\n`;
+    b += `set DIM1_VALUES=${normVals(dim1.values)}\r\n`;
+    if (hasDim2) b += `set DIM2_VALUES=${normVals(dim2.values)}\r\n`;
     b += `\r\n`;
 
     b += `rem --- Main loop ---\r\n`;
