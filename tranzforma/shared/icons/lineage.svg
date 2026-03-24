@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44" fill="none" stroke="#64b5f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <!-- root -->
+  <circle cx="22" cy="7" r="4" fill="rgba(100,181,246,0.2)"/>
+  <!-- branches -->
+  <path d="M22 11V17"/>
+  <path d="M22 17L11 23"/>
+  <path d="M22 17L33 23"/>
+  <!-- level-1 nodes -->
+  <circle cx="11" cy="26" r="3.5" fill="rgba(100,181,246,0.2)"/>
+  <circle cx="33" cy="26" r="3.5" fill="rgba(100,181,246,0.2)"/>
+  <!-- sub-branches -->
+  <path d="M11 29.5V33"/>
+  <path d="M11 33L6 37"/>
+  <path d="M11 33L16 37"/>
+  <path d="M33 29.5V33"/>
+  <!-- level-2 nodes -->
+  <circle cx="6" cy="39" r="2.5" fill="rgba(100,181,246,0.2)"/>
+  <circle cx="16" cy="39" r="2.5" fill="rgba(100,181,246,0.2)"/>
+  <circle cx="33" cy="36" r="2.5" fill="rgba(100,181,246,0.2)"/>
+</svg>

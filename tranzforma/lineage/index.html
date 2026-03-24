@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lineage — tranzForma</title>
+<link rel="stylesheet" href="../shared/common.css">
+<link rel="stylesheet" href="lineage.css">
+<script src="../shared/theme.js"></script>
+</head>
+<body>
+
+<header>
+  <img src="../shared/logo.png" alt="tranzForma">
+  <h1><a href="../index.html">tranzForma</a> Lineage</h1>
+  <span class="ver">v0.1</span>
+  <button style="margin-left:auto" class="theme-btn" onclick="toggleTheme()"></button>
+</header>
+
+<!-- ── Input View ── -->
+<div id="input-view">
+  <div class="input-box">
+    <div class="input-icon">📋</div>
+    <h2>ディメンション階層データを貼り付け</h2>
+    <p>fusionplace マネージャー画面からコピーしたタブ区切りデータを貼り付けてください。</p>
+    <textarea id="paste-area" placeholder="ここに Ctrl+V で貼り付け…" spellcheck="false"></textarea>
+    <button id="btn-parse" class="btn btn-primary" disabled>解析してツリー表示</button>
+  </div>
+</div>
+
+<!-- ── Tree View ── -->
+<div id="tree-view" style="display:none">
+  <div class="toolbar">
+    <button id="btn-undo" class="btn btn-secondary" title="元に戻す (Ctrl+Z)" disabled>↩ 元に戻す</button>
+    <span class="toolbar-sep"></span>
+    <button id="btn-expand" class="btn btn-secondary" title="すべて展開">▼ 展開</button>
+    <button id="btn-collapse" class="btn btn-secondary" title="すべて折りたたむ">▶ 折りたたむ</button>
+    <span class="toolbar-sep"></span>
+    <input type="text" id="search-input" class="search-input" placeholder="検索…"
+           oninput="onSearch()" onkeydown="onSearchKey(event)">
+    <button id="btn-search-prev" class="btn btn-secondary" title="前のヒットへ (Shift+Enter)" disabled>↑</button>
+    <button id="btn-search-next" class="btn btn-secondary" title="次のヒットへ (Enter)" disabled>↓</button>
+    <span id="search-count" class="toolbar-info"></span>
+    <div class="toolbar-spacer"></div>
+    <span id="node-count" class="toolbar-info"></span>
+    <select id="export-format" class="export-select">
+      <option value="original">元データ形式</option>
+      <option value="levels">レベル列</option>
+      <option value="tree">ツリー表示</option>
+    </select>
+    <button id="btn-copy" class="btn btn-primary" title="クリップボードにコピー">コピー</button>
+    <button id="btn-clear" class="btn btn-secondary" title="クリアして入力画面に戻る">クリア</button>
+  </div>
+  <main>
+    <div id="tree-container"></div>
+  </main>
+</div>
+
+<div id="drop-indicator"></div>
+<div id="drop-child-indicator"></div>
+<div id="toast"></div>
+
+<script src="lineage.js"></script>
+</body>
+</html>
