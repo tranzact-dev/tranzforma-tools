@@ -331,8 +331,10 @@ async function downloadFormZip() {
   if (typeof JSZip === 'undefined') {
     showToast('JSZipが読み込めません。インターネット接続を確認してください。', 'error'); return;
   }
+  const forms = getFilteredForms(apd);
+  if (!forms.length) { showToast('対象フォームがありません', 'error'); return; }
   const zip = new JSZip();
-  for (const f of apd.forms) {
+  for (const f of forms) {
     if (f.xml) zip.file(`${f.formLabel}.txt`, f.xml);
   }
   const dateStr = new Date().toISOString().slice(0, 10);
@@ -341,7 +343,8 @@ async function downloadFormZip() {
   const a       = document.createElement('a');
   a.href = url; a.download = `forms_APD-${activeResult.side}_${dateStr}.zip`;
   a.click(); URL.revokeObjectURL(url);
-  showToast(`${apd.forms.length}件のフォームをダウンロードしました`);
+  const suffix = document.getElementById('includeBK').checked ? '' : '（BK除外）';
+  showToast(`${forms.length}件のフォームをダウンロードしました${suffix}`);
 }
 
 function renderFormRows(forms) {
@@ -367,7 +370,7 @@ function filterList() {
   const apd = activeResult?.side === 'A' ? apdA : apdB;
   if (!apd) return;
 
-  const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
   const filtered = apd.forms.filter(f => f.xml && re.test(f.xml));
 
   document.getElementById('clearFilterBtn').style.display = '';
@@ -383,15 +386,22 @@ function clearListFilter() {
   if (apd) renderFormRows(apd.forms);
 }
 
+function getFilteredForms(apd) {
+  const includeBK = document.getElementById('includeBK').checked;
+  return includeBK ? apd.forms : apd.forms.filter(f => !f.formLabel.includes('_BK'));
+}
+
 function copyListTSV() {
   const apd = activeResult?.side === 'A' ? apdA : apdB;
   if (!apd) return;
+  const forms  = getFilteredForms(apd);
   const header = 'FORM_LIST_LABEL\tFORM_LIST_NAME\tFORM_LABEL\tFORM_NAME_JA\tFORM_NAME_EN\tREFLECT_CALC\tIMPORT\tEXPORT\tPARAMETERS\tTRIGGERS';
-  const rows   = apd.forms.map(f =>
+  const rows   = forms.map(f =>
     [f.flLabel, f.flName, f.formLabel, f.formNameJa, f.formNameEn,
      f.reflectCalc, f.import, f.export, f.parameters, f.triggers].join('\t')
   );
-  copyText([header, ...rows].join('\r\n'), 'TSVをコピーしました');
+  const suffix = document.getElementById('includeBK').checked ? '' : '（BK除外）';
+  copyText([header, ...rows].join('\r\n'), 'TSVをコピーしました' + suffix);
 }
 
 // ═══════════════════════════════════════════════════════════════════

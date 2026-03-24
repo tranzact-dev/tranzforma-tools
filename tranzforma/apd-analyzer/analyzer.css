@@ -57,6 +57,7 @@ body { justify-content: flex-start; }
 .action-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .compare-row { display: flex; justify-content: center; }
 .result-label { font: 400 11px var(--mono); color: var(--text3); }
+.bk-check { font: 400 13px var(--sans); color: var(--text2); display: flex; align-items: center; gap: 4px; cursor: pointer; user-select: none; }
 
 /* ─── Summary chips ─── */
 .chip-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }

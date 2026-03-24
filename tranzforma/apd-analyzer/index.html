@@ -66,12 +66,12 @@
         <span id="listSummary" class="result-label"></span>
         <button class="btn btn-fix" onclick="copyListTSV()">📋 TSVをコピー</button>
         <button class="btn btn-fix" onclick="downloadFormZip()">⬇ フォームZIP</button>
+        <label class="bk-check"><input type="checkbox" id="includeBK"> BKも含めて出力</label>
       </div>
       <div class="list-search-bar">
-        <input type="text" id="listSearchInput" class="search-input" placeholder="XMLを検索…"
-               onkeydown="if(event.key==='Enter')filterList(); if(event.key==='Escape')clearListFilter()">
-        <button class="btn btn-secondary" onclick="filterList()">🔍 検索</button>
-        <button class="btn btn-secondary" id="clearFilterBtn" onclick="clearListFilter()" style="display:none">✕ クリア</button>
+        <input type="text" id="listSearchInput" class="search-input" placeholder="検索…"
+               oninput="filterList()" onkeydown="if(event.key==='Escape')clearListFilter()">
+        <button class="btn btn-secondary" id="clearFilterBtn" onclick="clearListFilter()" style="display:none">✕</button>
         <span id="filterSummary" class="result-label"></span>
       </div>
       <div class="table-wrap">
