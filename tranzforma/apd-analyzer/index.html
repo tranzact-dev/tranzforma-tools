@@ -6,6 +6,8 @@
 <title>tranzForma APD analyzer</title>
 <link rel="stylesheet" href="../shared/common.css">
 <script src="../shared/theme.js"></script>
+<script src="../shared/auth.js"></script>
+<script src="../shared/auth-guard.js"></script>
 <link rel="stylesheet" href="analyzer.css">
 </head>
 <body>
@@ -34,6 +36,7 @@
         <button class="btn btn-secondary" id="ledgerBtnA"  onclick="renderLedgerResult('A')"  disabled>📒 元帳設定</button>
         <button class="btn btn-secondary" id="transBtnA"   onclick="renderTransResult('A')"   disabled>🔄 変換表</button>
         <button class="btn btn-secondary" id="scriptBtnA"  onclick="renderScriptResult('A')"  disabled>📜 スクリプト</button>
+        <button class="btn btn-secondary" id="graphBtnA"   onclick="renderGraphResult('A')"   disabled>🔗 関連図</button>
       </div>
     </div>
     <div class="apd-slot">
@@ -49,6 +52,7 @@
         <button class="btn btn-secondary" id="ledgerBtnB"  onclick="renderLedgerResult('B')"  disabled>📒 元帳設定</button>
         <button class="btn btn-secondary" id="transBtnB"   onclick="renderTransResult('B')"   disabled>🔄 変換表</button>
         <button class="btn btn-secondary" id="scriptBtnB"  onclick="renderScriptResult('B')"  disabled>📜 スクリプト</button>
+        <button class="btn btn-secondary" id="graphBtnB"   onclick="renderGraphResult('B')"   disabled>🔗 関連図</button>
       </div>
     </div>
   </div>
@@ -86,6 +90,10 @@
               <th>IMP</th>
               <th>EXP</th>
               <th>REFLECT</th>
+              <th>RELATED_LEDGERS</th>
+              <th>UPDATE_LEDGER</th>
+              <th>UPDATE_TYPE</th>
+              <th>RESOLVED_AT</th>
               <th>パラメータ</th>
               <th>トリガー</th>
             </tr>
@@ -155,6 +163,31 @@
       </div>
     </div>
 
+    <!-- 関連図 -->
+    <div id="graphResult" style="display:none">
+      <div class="action-row">
+        <span id="graphSummary" class="result-label"></span>
+        <select id="graphFlFilter" class="graph-filter" onchange="applyGraphFilter()">
+          <option value="">すべてのフォームリスト</option>
+        </select>
+        <button class="btn btn-fix" onclick="copyEdgeListTSV()">📋 エッジリストTSV</button>
+        <button class="btn btn-fix" onclick="downloadGraphSVG()">⬇ SVG</button>
+        <button class="btn btn-fix" onclick="downloadGraphPNG()">⬇ PNG</button>
+        <label class="bk-check"><input type="checkbox" id="graphIncludeBK" onchange="applyGraphFilter()"> BKも含める</label>
+        <label class="bk-check"><input type="checkbox" id="graphShowName" onchange="toggleGraphLabel()"> 名称を表示</label>
+      </div>
+      <div class="graph-legend">
+        <span class="legend-item"><span class="legend-dot legend-ledger"></span>元帳</span>
+        <span class="legend-item"><span class="legend-dot legend-form"></span>フォーム</span>
+        <span class="legend-item"><span class="legend-dot legend-script"></span>スクリプト</span>
+        <span class="legend-sep">|</span>
+        <span class="legend-item"><span class="legend-line legend-source"></span>参照</span>
+        <span class="legend-item"><span class="legend-line legend-update"></span>更新</span>
+        <span class="legend-item"><span class="legend-line legend-trigger"></span>トリガー</span>
+      </div>
+      <div id="cyContainer"></div>
+    </div>
+
     <!-- 差分比較 -->
     <div id="compareResult" style="display:none">
       <div class="chip-row" id="filterChips"></div>
@@ -197,6 +230,7 @@
 <div id="toast" class="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.30.4/cytoscape.min.js"></script>
 <script src="analyzer.js"></script>
 </body>
 </html>

@@ -54,6 +54,142 @@ function loadAPD(xmlText) {
   };
 }
 
+// ─── 関連元帳の収集 ──────────────────────────────────────────────────
+function collectRelatedLedgers(root) {
+  const ledgers = new Set();
+
+  // 1. デフォルト: document-spec直下の source-ledger-label
+  const def = root.querySelector(':scope > source-ledger-label')?.textContent;
+  if (def) ledgers.add(def);
+
+  // 2. 列仕様: column-axis-spec > column-row-spec の source-ledger-label
+  for (const crs of root.querySelectorAll('column-axis-spec column-row-spec')) {
+    const v = crs.querySelector('source-ledger-label')?.textContent;
+    if (v) ledgers.add(v);
+  }
+
+  // 3. 行仕様: row-axis-spec > column-row-spec の source-ledger-label
+  for (const crs of root.querySelectorAll('row-axis-spec column-row-spec')) {
+    const v = crs.querySelector('source-ledger-label')?.textContent;
+    if (v) ledgers.add(v);
+  }
+
+  // 4. セル仕様: cell-spec の source-ledger-label
+  for (const cell of root.querySelectorAll('cell-spec')) {
+    const v = cell.querySelector('source-ledger-label')?.textContent;
+    if (v) ledgers.add(v);
+  }
+
+  // 5. インポート仕様: import-spec > target-ledger-label
+  const imp = root.querySelector('import-spec > target-ledger-label')?.textContent;
+  if (imp) ledgers.add(imp);
+
+  return [...ledgers].sort().join(',');
+}
+
+// ─── UPDATE_LEDGER 解析 ──────────────────────────────────────────────
+function resolveLedger(root) {
+  const relatedLedgers = collectRelatedLedgers(root);
+
+  // Pattern 1: import enabled
+  if (root.querySelector('import-spec > enabled')?.textContent === 'true') {
+    const ledger = root.querySelector('import-spec > target-ledger-label')?.textContent || '';
+    return { updateLedger: ledger, updateType: 'import', resolvedAt: 'target-ledger', relatedLedgers };
+  }
+
+  // Pattern 2: reflect-calc (cell-spec or column-row-spec)
+  const cellsWithReflect = [...root.querySelectorAll('cell-spec')]
+    .filter(cell => cell.querySelector('reflect-calc')?.textContent === 'true');
+
+  // column-row-spec with reflect-calc=true (column side and row side)
+  const colCrsWithReflect = [...root.querySelectorAll('column-axis-spec column-row-spec')]
+    .filter(crs => crs.querySelector('reflect-calc')?.textContent === 'true');
+  const rowCrsWithReflect = [...root.querySelectorAll('row-axis-spec column-row-spec')]
+    .filter(crs => crs.querySelector('reflect-calc')?.textContent === 'true');
+
+  const hasReflect = cellsWithReflect.length || colCrsWithReflect.length || rowCrsWithReflect.length;
+
+  if (hasReflect) {
+    // Build lookup maps for column-row-spec source-ledger-label
+    const colSpecMap = new Map();
+    for (const crs of root.querySelectorAll('column-axis-spec column-row-spec')) {
+      const ledger = crs.querySelector('source-ledger-label')?.textContent;
+      if (ledger) colSpecMap.set(crs.getAttribute('id'), ledger);
+    }
+    const rowSpecMap = new Map();
+    for (const crs of root.querySelectorAll('row-axis-spec column-row-spec')) {
+      const ledger = crs.querySelector('source-ledger-label')?.textContent;
+      if (ledger) rowSpecMap.set(crs.getAttribute('id'), ledger);
+    }
+
+    const defaultLedger = root.querySelector(':scope > source-ledger-label')?.textContent || '';
+    const ledgers = new Set();
+    let firstResolvedAt = '';
+
+    // cell-spec: priority chain cell > column > row > default
+    for (const cell of cellsWithReflect) {
+      const colId = cell.getAttribute('column-id');
+      const rowId = cell.getAttribute('row-id');
+
+      const cellLedger = cell.querySelector('source-ledger-label')?.textContent;
+      if (cellLedger) {
+        ledgers.add(cellLedger);
+        if (!firstResolvedAt) firstResolvedAt = 'cell';
+        continue;
+      }
+      const colLedger = colSpecMap.get(colId);
+      if (colLedger) {
+        ledgers.add(colLedger);
+        if (!firstResolvedAt) firstResolvedAt = 'column';
+        continue;
+      }
+      const rowLedger = rowSpecMap.get(rowId);
+      if (rowLedger) {
+        ledgers.add(rowLedger);
+        if (!firstResolvedAt) firstResolvedAt = 'row';
+        continue;
+      }
+      if (defaultLedger) {
+        ledgers.add(defaultLedger);
+        if (!firstResolvedAt) firstResolvedAt = 'default';
+      }
+    }
+
+    // column-row-spec (column side): own source-ledger-label > default
+    for (const crs of colCrsWithReflect) {
+      const own = crs.querySelector('source-ledger-label')?.textContent;
+      if (own) {
+        ledgers.add(own);
+        if (!firstResolvedAt) firstResolvedAt = 'column';
+      } else if (defaultLedger) {
+        ledgers.add(defaultLedger);
+        if (!firstResolvedAt) firstResolvedAt = 'default';
+      }
+    }
+
+    // column-row-spec (row side): own source-ledger-label > default
+    for (const crs of rowCrsWithReflect) {
+      const own = crs.querySelector('source-ledger-label')?.textContent;
+      if (own) {
+        ledgers.add(own);
+        if (!firstResolvedAt) firstResolvedAt = 'row';
+      } else if (defaultLedger) {
+        ledgers.add(defaultLedger);
+        if (!firstResolvedAt) firstResolvedAt = 'default';
+      }
+    }
+
+    if (ledgers.size > 0) {
+      const resolvedLedger = [...ledgers].sort().join(',');
+      return { updateLedger: resolvedLedger, updateType: 'reflect-calc', resolvedAt: firstResolvedAt, relatedLedgers };
+    }
+    return { updateLedger: '', updateType: 'reflect-calc', resolvedAt: '', relatedLedgers };
+  }
+
+  // No pattern matched
+  return { updateLedger: '', updateType: '', resolvedAt: '', relatedLedgers };
+}
+
 // ─── フォーム ───────────────────────────────────────────────────────
 function parseForms(doc) {
   const entry = doc.querySelector('entries > entry');
@@ -102,7 +238,9 @@ function parseForms(doc) {
           flLabel, flName: flNameStr, formLabel,
           formNameJa: '', formNameEn: '',
           reflectCalc: '', import: '', export: '',
-          parameters: '', triggers: '', xml: xmlContent
+          parameters: '', triggers: '',
+          updateLedger: '', updateType: '', resolvedAt: '', relatedLedgers: '',
+          xml: xmlContent
         };
 
         if (xmlContent) {
@@ -126,6 +264,13 @@ function parseForms(doc) {
                   const label = el.querySelector('label')?.textContent || '';
                   return `${type}:${label}`;
                 }).join(',');
+
+              // UPDATE_LEDGER resolution
+              const ledgerInfo = resolveLedger(root);
+              fd.updateLedger   = ledgerInfo.updateLedger;
+              fd.updateType     = ledgerInfo.updateType;
+              fd.resolvedAt     = ledgerInfo.resolvedAt;
+              fd.relatedLedgers = ledgerInfo.relatedLedgers;
             }
           } catch (_) {}
         }
@@ -267,7 +412,7 @@ function onApdLoaded(side, text, fileName) {
     dropEl.querySelector('.drop-filename').textContent =
       `${fileName} (フォーム:${data.forms.length} / 台帳:${data.ledgers.length} / 変換表:${data.transTables.length} / スクリプト:${data.scripts.length})`;
 
-    ['list', 'ledger', 'trans', 'script'].forEach(t =>
+    ['list', 'ledger', 'trans', 'script', 'graph'].forEach(t =>
       document.getElementById(`${t}Btn${side}`).disabled = false
     );
     document.getElementById('compareBtn').disabled = !(apdA && apdB);
@@ -289,7 +434,7 @@ setupDrop('dropB', 'fileB', (t, f) => onApdLoaded('B', t, f));
 // ═══════════════════════════════════════════════════════════════════
 // Result visibility
 // ═══════════════════════════════════════════════════════════════════
-const RESULT_TYPES = ['list', 'ledger', 'trans', 'script', 'compare'];
+const RESULT_TYPES = ['list', 'ledger', 'trans', 'script', 'graph', 'compare'];
 
 function showResult(type) {
   RESULT_TYPES.forEach(t =>
@@ -358,6 +503,10 @@ function renderFormRows(forms) {
       <td class="${f.import      ? 'on' : ''}">${esc(f.import)}</td>
       <td class="${f.export      ? 'on' : ''}">${esc(f.export)}</td>
       <td class="${f.reflectCalc ? 'on' : ''}">${esc(f.reflectCalc)}</td>
+      <td class="params">${esc(f.relatedLedgers)}</td>
+      <td class="${f.updateLedger.includes(',') ? 'on' : ''}" style="${f.updateLedger.includes(',') ? 'color:var(--warn)' : ''}">${esc(f.updateLedger)}</td>
+      <td>${esc(f.updateType)}</td>
+      <td>${esc(f.resolvedAt)}</td>
       <td class="params">${esc(f.parameters)}</td>
       <td class="params">${esc(f.triggers)}</td>
     </tr>`).join('');
@@ -395,10 +544,11 @@ function copyListTSV() {
   const apd = activeResult?.side === 'A' ? apdA : apdB;
   if (!apd) return;
   const forms  = getFilteredForms(apd);
-  const header = 'FORM_LIST_LABEL\tFORM_LIST_NAME\tFORM_LABEL\tFORM_NAME_JA\tFORM_NAME_EN\tREFLECT_CALC\tIMPORT\tEXPORT\tPARAMETERS\tTRIGGERS';
+  const header = 'FORM_LIST_LABEL\tFORM_LIST_NAME\tFORM_LABEL\tFORM_NAME_JA\tFORM_NAME_EN\tREFLECT_CALC\tIMPORT\tEXPORT\tRELATED_LEDGERS\tUPDATE_LEDGER\tUPDATE_TYPE\tRESOLVED_AT\tPARAMETERS\tTRIGGERS';
   const rows   = forms.map(f =>
     [f.flLabel, f.flName, f.formLabel, f.formNameJa, f.formNameEn,
-     f.reflectCalc, f.import, f.export, f.parameters, f.triggers].join('\t')
+     f.reflectCalc, f.import, f.export, f.relatedLedgers, f.updateLedger, f.updateType, f.resolvedAt,
+     f.parameters, f.triggers].join('\t')
   );
   const suffix = document.getElementById('includeBK').checked ? '' : '（BK除外）';
   copyText([header, ...rows].join('\r\n'), 'TSVをコピーしました' + suffix);
@@ -706,4 +856,463 @@ function showToast(msg, type) {
 
 function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 関連図 (Cytoscape.js)
+// ═══════════════════════════════════════════════════════════════════
+let cyInstance = null;
+
+function buildGraphData(apd, flFilter, includeBK) {
+  const nodes = [];
+  const edges = [];
+  const ledgerSet   = new Set();
+  const scriptSet   = new Set();
+
+  let forms = apd.forms;
+  if (flFilter) forms = forms.filter(f => f.flLabel === flFilter);
+  if (!includeBK) forms = forms.filter(f => !f.formLabel.includes('_BK'));
+
+  // Collect all ledger and script nodes from forms
+  for (const f of forms) {
+    // Form node
+    nodes.push({
+      data: {
+        id: `form:${f.formLabel}`,
+        label: f.formLabel,
+        type: 'form',
+        nameJa: f.formNameJa,
+        flLabel: f.flLabel,
+      }
+    });
+
+    // Related ledgers → source edges
+    if (f.relatedLedgers) {
+      for (const ledger of f.relatedLedgers.split(',')) {
+        ledgerSet.add(ledger);
+        edges.push({
+          data: {
+            id: `source:${f.formLabel}:${ledger}`,
+            source: `form:${f.formLabel}`,
+            target: `ledger:${ledger}`,
+            type: 'source',
+          }
+        });
+      }
+    }
+
+    // Update ledger → update edges (may overlap with source, separate edge type)
+    if (f.updateLedger) {
+      for (const ledger of f.updateLedger.split(',')) {
+        ledgerSet.add(ledger);
+        edges.push({
+          data: {
+            id: `update:${f.formLabel}:${ledger}`,
+            source: `form:${f.formLabel}`,
+            target: `ledger:${ledger}`,
+            type: 'update',
+            updateType: f.updateType,
+          }
+        });
+      }
+    }
+
+    // Triggers → script edges
+    if (f.triggers) {
+      for (const trigger of f.triggers.split(',')) {
+        const m = trigger.match(/^RUN_SCRIPT:(.+)$/);
+        if (m) {
+          const scriptLabel = m[1];
+          scriptSet.add(scriptLabel);
+          edges.push({
+            data: {
+              id: `trigger:${f.formLabel}:${scriptLabel}`,
+              source: `form:${f.formLabel}`,
+              target: `script:${scriptLabel}`,
+              type: 'trigger',
+            }
+          });
+        }
+      }
+    }
+  }
+
+  // Ledger nodes
+  for (const label of ledgerSet) {
+    const ledgerInfo = apd.ledgers.find(l => l.label === label);
+    nodes.push({
+      data: {
+        id: `ledger:${label}`,
+        label: label,
+        type: 'ledger',
+        nameJa: ledgerInfo?.nameJa || '',
+      }
+    });
+  }
+
+  // Script nodes
+  for (const label of scriptSet) {
+    const scriptInfo = apd.scripts.find(s => s.label === label);
+    nodes.push({
+      data: {
+        id: `script:${label}`,
+        label: label,
+        type: 'script',
+        nameJa: scriptInfo?.nameJa || '',
+      }
+    });
+  }
+
+  return { nodes, edges };
+}
+
+function renderGraphResult(side) {
+  const apd = side === 'A' ? apdA : apdB;
+  if (!apd) return;
+  activeResult = { type: 'graph', side };
+  showResult('graph');
+
+  if (typeof cytoscape === 'undefined') {
+    showToast('Cytoscape.jsが読み込めません。インターネット接続を確認してください。', 'error');
+    return;
+  }
+
+  // Populate form-list filter
+  const flSelect = document.getElementById('graphFlFilter');
+  const flLabels = [...new Set(apd.forms.map(f => f.flLabel))].sort();
+  flSelect.innerHTML = '<option value="">すべてのフォームリスト</option>'
+    + flLabels.map(fl => `<option value="${esc(fl)}">${esc(fl)}</option>`).join('');
+
+  drawGraph(apd);
+}
+
+function applyGraphFilter() {
+  const apd = activeResult?.side === 'A' ? apdA : apdB;
+  if (!apd) return;
+  drawGraph(apd);
+}
+
+function drawGraph(apd) {
+  const flFilter  = document.getElementById('graphFlFilter').value || null;
+  const includeBK = document.getElementById('graphIncludeBK').checked;
+  const { nodes, edges } = buildGraphData(apd, flFilter, includeBK);
+  const ledgerCount  = nodes.filter(n => n.data.type === 'ledger').length;
+  const formCount    = nodes.filter(n => n.data.type === 'form').length;
+  const scriptCount  = nodes.filter(n => n.data.type === 'script').length;
+  document.getElementById('graphSummary').textContent =
+    `[APD-${activeResult.side}] 元帳:${ledgerCount} / フォーム:${formCount} / スクリプト:${scriptCount} / エッジ:${edges.length}`;
+
+  // Remove source edges if a corresponding update edge exists (avoid duplicate lines)
+  const updateEdgeKeys = new Set(
+    edges.filter(e => e.data.type === 'update')
+      .map(e => `${e.data.source}→${e.data.target}`)
+  );
+  const filteredEdges = edges.filter(e =>
+    e.data.type !== 'source' || !updateEdgeKeys.has(`${e.data.source}→${e.data.target}`)
+  );
+
+  if (cyInstance) cyInstance.destroy();
+
+  cyInstance = cytoscape({
+    container: document.getElementById('cyContainer'),
+    elements: [...nodes, ...filteredEdges],
+    style: [
+      // ── Nodes ──
+      {
+        selector: 'node',
+        style: {
+          'label': 'data(label)',
+          'font-size': 9,
+          'font-family': '"IBM Plex Mono", monospace',
+          'text-valign': 'center',
+          'text-halign': 'center',
+          'text-wrap': 'wrap',
+          'text-max-width': 'data(textWidth)',
+          'color': '#e0e4ee',
+          'shape': 'round-rectangle',
+          'corner-radius': 4,
+          'width': 'label',
+          'height': 'label',
+          'padding': 8,
+          'border-width': 1,
+          'border-opacity': 0.5,
+          'shadow-blur': 8,
+          'shadow-color': '#000',
+          'shadow-opacity': 0.4,
+          'shadow-offset-x': 0,
+          'shadow-offset-y': 2,
+        }
+      },
+      {
+        selector: 'node[type="ledger"]',
+        style: {
+          'background-color': '#2d6b4f',
+          'border-color': '#3d9b6e',
+        }
+      },
+      {
+        selector: 'node[type="form"]',
+        style: {
+          'background-color': '#2d4a7a',
+          'border-color': '#4a78c4',
+        }
+      },
+      {
+        selector: 'node[type="script"]',
+        style: {
+          'background-color': '#6b5a2d',
+          'border-color': '#a08040',
+        }
+      },
+      // ── Edges ──
+      {
+        selector: 'edge',
+        style: {
+          'width': 1,
+          'curve-style': 'taxi',
+          'taxi-direction': 'auto',
+          'target-arrow-shape': 'triangle',
+          'arrow-scale': 0.7,
+        }
+      },
+      {
+        selector: 'edge[type="source"]',
+        style: {
+          'line-color': '#3a3f52',
+          'target-arrow-color': '#3a3f52',
+          'line-style': 'dotted',
+          'opacity': 0.45,
+          'width': 0.8,
+        }
+      },
+      {
+        selector: 'edge[type="update"]',
+        style: {
+          'line-color': '#a08040',
+          'target-arrow-color': '#a08040',
+          'width': 1.5,
+        }
+      },
+      {
+        selector: 'edge[type="trigger"]',
+        style: {
+          'line-color': '#7a50b0',
+          'target-arrow-color': '#7a50b0',
+          'line-style': 'dashed',
+          'width': 1.2,
+        }
+      },
+      // ── Hover / Selection ──
+      {
+        selector: 'node:selected',
+        style: {
+          'border-width': 2,
+          'border-color': '#c0c8d8',
+          'shadow-blur': 14,
+          'shadow-opacity': 0.6,
+          'text-background-color': '#13161f',
+          'text-background-opacity': 0.85,
+          'text-background-padding': '3px',
+          'font-size': 12,
+          'font-weight': 600,
+          'z-index': 10,
+        }
+      },
+      {
+        selector: '.highlighted',
+        style: { 'opacity': 1, 'z-index': 10 }
+      },
+      {
+        selector: '.dimmed',
+        style: { 'opacity': 0.1 }
+      },
+    ],
+    layout: {
+      name: 'cose',
+      animate: false,
+      nodeDimensionsIncludeLabels: true,
+      nodeRepulsion: 8000,
+      idealEdgeLength: 120,
+      gravity: 0.3,
+      padding: 40,
+    },
+    minZoom: 0.2,
+    maxZoom: 4,
+  });
+
+  // ── Interaction: highlight connected nodes on tap ──
+  cyInstance.on('tap', 'node', function (evt) {
+    const node = evt.target;
+    const connected = node.connectedEdges().connectedNodes().union(node);
+    const connectedEdges = node.connectedEdges();
+
+    cyInstance.elements().addClass('dimmed').removeClass('highlighted');
+    connected.removeClass('dimmed').addClass('highlighted');
+    connectedEdges.removeClass('dimmed').addClass('highlighted');
+  });
+
+  cyInstance.on('tap', function (evt) {
+    if (evt.target === cyInstance) {
+      cyInstance.elements().removeClass('dimmed highlighted');
+    }
+  });
+
+  setupOverlayTracking();
+  // Restore name overlay if checkbox is on
+  if (document.getElementById('graphShowName').checked) renderNameOverlays();
+
+  showToast(`関連図を描画しました（${nodes.length}ノード / ${filteredEdges.length}エッジ）`);
+}
+
+function copyEdgeListTSV() {
+  const apd = activeResult?.side === 'A' ? apdA : apdB;
+  if (!apd) return;
+  const flFilter  = document.getElementById('graphFlFilter').value || null;
+  const includeBK = document.getElementById('graphIncludeBK').checked;
+  const { edges } = buildGraphData(apd, flFilter, includeBK);
+
+  const header = 'FROM_TYPE\tFROM_LABEL\tTO_TYPE\tTO_LABEL\tEDGE_TYPE\tDETAIL';
+  const rows = edges.map(e => {
+    const d = e.data;
+    const [fromType, fromLabel] = d.source.split(':');
+    const [toType, toLabel]     = d.target.split(':');
+    const detail = d.type === 'update' ? (d.updateType || '') : '';
+    return [fromType, fromLabel, toType, toLabel, d.type, detail].join('\t');
+  });
+  copyText([header, ...rows].join('\r\n'), 'エッジリストTSVをコピーしました');
+}
+
+function downloadGraphPNG() {
+  if (!cyInstance) return;
+  const png = cyInstance.png({ output: 'blob', bg: '#0c0e14', scale: 2, full: true });
+  const url = URL.createObjectURL(png);
+  const a = document.createElement('a');
+  a.href = url; a.download = `graph_APD-${activeResult.side}.png`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast('PNGをダウンロードしました');
+}
+
+function downloadGraphSVG() {
+  if (!cyInstance) return;
+
+  const pad = 40;
+  const bb = cyInstance.elements().boundingBox();
+  const w = bb.w + pad * 2;
+  const h = bb.h + pad * 2;
+  const ox = bb.x1 - pad;
+  const oy = bb.y1 - pad;
+
+  const escXml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  const nodeBg     = { ledger: '#2d6b4f', form: '#2d4a7a', script: '#6b5a2d' };
+  const nodeBorder = { ledger: '#3d9b6e', form: '#4a78c4', script: '#a08040' };
+  const nodeText   = { ledger: '#6ec99e', form: '#7aacef', script: '#d4b060' };
+  const edgeColors = { source: '#3a3f52', update: '#a08040', trigger: '#7a50b0' };
+  const edgeDash   = { source: 'stroke-dasharray="4 3"', update: '', trigger: 'stroke-dasharray="8 4"' };
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${ox} ${oy} ${w} ${h}" font-family="'IBM Plex Mono', monospace">\n`;
+  svg += `<defs><filter id="shadow"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.4"/></filter></defs>\n`;
+  svg += `<rect x="${ox}" y="${oy}" width="${w}" height="${h}" fill="#0c0e14"/>\n`;
+
+  // Edges
+  cyInstance.edges().forEach(edge => {
+    const src = edge.sourceEndpoint();
+    const tgt = edge.targetEndpoint();
+    const type = edge.data('type');
+    const color = edgeColors[type] || '#3a3f52';
+    const dash = edgeDash[type] || '';
+    const sw = type === 'update' ? 1.5 : type === 'trigger' ? 1.2 : 0.8;
+    const opacity = type === 'source' ? 0.45 : 1;
+
+    const midY = (src.y + tgt.y) / 2;
+    svg += `<path d="M${src.x},${src.y} L${src.x},${midY} L${tgt.x},${midY} L${tgt.x},${tgt.y}" fill="none" stroke="${color}" stroke-width="${sw}" opacity="${opacity}" ${dash}/>\n`;
+
+    const angle = Math.atan2(tgt.y - midY, tgt.x - tgt.x) || (tgt.y > midY ? Math.PI/2 : -Math.PI/2);
+    const aLen = 6;
+    const ax1 = tgt.x - aLen * Math.cos(angle - 0.4);
+    const ay1 = tgt.y - aLen * Math.sin(angle - 0.4);
+    const ax2 = tgt.x - aLen * Math.cos(angle + 0.4);
+    const ay2 = tgt.y - aLen * Math.sin(angle + 0.4);
+    svg += `<polygon points="${tgt.x},${tgt.y} ${ax1},${ay1} ${ax2},${ay2}" fill="${color}" opacity="${opacity}"/>\n`;
+  });
+
+  // Nodes
+  cyInstance.nodes().forEach(node => {
+    const pos = node.position();
+    const d = node.data();
+    const type = d.type;
+    const bg = nodeBg[type] || '#2d4a7a';
+    const border = nodeBorder[type] || '#4a78c4';
+    const bb = node.boundingBox();
+    const nw = bb.w;
+    const nh = bb.h;
+
+    // Rectangle with shadow
+    svg += `<rect x="${pos.x - nw/2}" y="${pos.y - nh/2}" width="${nw}" height="${nh}" rx="4" fill="${bg}" stroke="${border}" stroke-width="1" filter="url(#shadow)"/>\n`;
+
+    // Label inside node
+    const label = d.label || '';
+    const lines = label.split('\n');
+    const lineH = 12;
+    const totalH = lines.length * lineH;
+    const startY = pos.y - totalH/2 + lineH * 0.75;
+    lines.forEach((line, i) => {
+      svg += `<text x="${pos.x}" y="${startY + i * lineH}" text-anchor="middle" fill="#e0e4ee" font-size="9">${escXml(line)}</text>\n`;
+    });
+  });
+
+  svg += '</svg>';
+
+  const blob = new Blob([svg], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `graph_APD-${activeResult.side}.svg`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast('SVGをダウンロードしました');
+}
+
+function toggleGraphLabel() {
+  if (!cyInstance) return;
+  const showName = document.getElementById('graphShowName').checked;
+  clearNameOverlays();
+  if (showName) renderNameOverlays();
+}
+
+function clearNameOverlays() {
+  document.querySelectorAll('.cy-name-overlay').forEach(el => el.remove());
+}
+
+function renderNameOverlays() {
+  if (!cyInstance) return;
+  const container = document.getElementById('cyContainer');
+  const pan = cyInstance.pan();
+  const zoom = cyInstance.zoom();
+
+  cyInstance.nodes().forEach(node => {
+    const name = node.data('nameJa');
+    if (!name) return;
+    const pos = node.position();
+    const bb = node.boundingBox();
+    const x = (pos.x) * zoom + pan.x;
+    const y = (bb.y2) * zoom + pan.y + 2;
+
+    const el = document.createElement('div');
+    el.className = 'cy-name-overlay';
+    el.textContent = name;
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+    el.style.fontSize = Math.max(5, 7 * zoom) + 'px';
+    container.appendChild(el);
+  });
+}
+
+// Update overlay positions on pan/zoom
+function setupOverlayTracking() {
+  if (!cyInstance) return;
+  const update = () => {
+    if (document.getElementById('graphShowName').checked) {
+      clearNameOverlays();
+      renderNameOverlays();
+    }
+  };
+  cyInstance.on('pan zoom', update);
 }
