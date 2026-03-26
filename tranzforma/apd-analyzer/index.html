@@ -37,6 +37,7 @@
         <button class="btn btn-secondary" id="transBtnA"   onclick="renderTransResult('A')"   disabled>🔄 変換表</button>
         <button class="btn btn-secondary" id="scriptBtnA"  onclick="renderScriptResult('A')"  disabled>📜 スクリプト</button>
         <button class="btn btn-secondary" id="graphBtnA"   onclick="renderGraphResult('A')"   disabled>🔗 関連図</button>
+        <button class="btn btn-secondary" id="formgenBtnA" onclick="renderFormGenResult('A')" disabled>🛠 フォーム生成</button>
       </div>
     </div>
     <div class="apd-slot">
@@ -53,6 +54,7 @@
         <button class="btn btn-secondary" id="transBtnB"   onclick="renderTransResult('B')"   disabled>🔄 変換表</button>
         <button class="btn btn-secondary" id="scriptBtnB"  onclick="renderScriptResult('B')"  disabled>📜 スクリプト</button>
         <button class="btn btn-secondary" id="graphBtnB"   onclick="renderGraphResult('B')"   disabled>🔗 関連図</button>
+        <button class="btn btn-secondary" id="formgenBtnB" onclick="renderFormGenResult('B')" disabled>🛠 フォーム生成</button>
       </div>
     </div>
   </div>
@@ -186,6 +188,67 @@
         <span class="legend-item"><span class="legend-line legend-trigger"></span>トリガー</span>
       </div>
       <div id="cyContainer"></div>
+    </div>
+
+    <!-- フォーム生成 -->
+    <div id="formgenResult" style="display:none">
+      <div class="fg-wizard">
+        <!-- メタ情報 -->
+        <div class="fg-meta-row">
+          <label>元帳 <select id="fgLedger" class="fg-select" onchange="fgSelectLedger()"></select></label>
+          <label>ラベル <input type="text" id="fgFormLabel" class="fg-input" placeholder="924_500"></label>
+          <label>名称 <input type="text" id="fgFormNameJa" class="fg-input" placeholder="生産高集計"></label>
+        </div>
+
+        <!-- ディメンション配置エリア -->
+        <div class="fg-board" id="fgBoard">
+          <div class="fg-zone" id="fgZone_unassigned">
+            <div class="fg-zone-label">未割り当て</div>
+            <div class="fg-zone-drop" data-zone="unassigned"></div>
+          </div>
+          <div class="fg-zone" id="fgZone_fixedGroup">
+            <div class="fg-zone-label">デフォルト設定 (source-member-tuple)</div>
+            <div class="fg-fixed-grid">
+              <div class="fg-fixed-sub" id="fgZone_fixed">
+                <div class="fg-sub-label">個別指定</div>
+                <div class="fg-zone-drop" data-zone="fixed"></div>
+              </div>
+              <div class="fg-fixed-sub" id="fgZone_fixed-total">
+                <div class="fg-sub-label">TOTAL</div>
+                <div class="fg-zone-drop" data-zone="fixed-total"></div>
+              </div>
+              <div class="fg-fixed-sub" id="fgZone_fixed-none">
+                <div class="fg-sub-label">NONE</div>
+                <div class="fg-zone-drop" data-zone="fixed-none"></div>
+              </div>
+            </div>
+          </div>
+          <div class="fg-zone" id="fgZone_parameter">
+            <div class="fg-zone-label">パラメータ</div>
+            <div class="fg-zone-drop" data-zone="parameter"></div>
+          </div>
+          <div class="fg-axis-row">
+            <div class="fg-zone fg-zone-half" id="fgZone_row-loop">
+              <div class="fg-zone-label">行ループ</div>
+              <div class="fg-zone-drop" data-zone="row-loop"></div>
+            </div>
+            <div class="fg-zone fg-zone-half" id="fgZone_column-loop">
+              <div class="fg-zone-label">列ループ</div>
+              <div class="fg-zone-drop" data-zone="column-loop"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- アクション -->
+        <div class="fg-actions">
+          <button class="btn btn-primary" onclick="fgGenerate()">XML生成</button>
+          <button class="btn btn-fix" onclick="fgCopyXml()" id="fgCopyBtn" style="display:none">📋 コピー</button>
+          <button class="btn btn-fix" onclick="fgDownloadXml()" id="fgDlBtn" style="display:none">⬇ ダウンロード</button>
+        </div>
+
+        <!-- XMLプレビュー -->
+        <pre class="fg-xml-preview" id="fgXmlPreview" style="display:none"><code id="fgXmlOutput"></code></pre>
+      </div>
     </div>
 
     <!-- 差分比較 -->

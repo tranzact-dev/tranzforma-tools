@@ -181,6 +181,92 @@ td.params { color: var(--info); font-size: 11px; }
   white-space: nowrap;
 }
 
+/* ─── Form Generator ─── */
+.fg-wizard { display: flex; flex-direction: column; gap: 16px; }
+.fg-meta-row {
+  display: flex; gap: 12px; flex-wrap: wrap; align-items: end;
+}
+.fg-meta-row label {
+  display: flex; flex-direction: column; gap: 4px;
+  font: 400 11px var(--mono); color: var(--text3);
+}
+.fg-input {
+  padding: 6px 10px; border-radius: 5px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text1); font: 400 12px var(--mono);
+  min-width: 140px;
+}
+.fg-input:focus { border-color: var(--accent); outline: none; }
+.fg-select {
+  padding: 6px 10px; border-radius: 5px; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text1); font: 400 12px var(--mono);
+}
+.fg-select:focus { border-color: var(--accent); }
+
+/* ─── Board & Zones ─── */
+.fg-board { display: flex; flex-direction: column; gap: 10px; }
+.fg-zone {
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); padding: 10px 12px;
+}
+.fg-zone-label {
+  font: 600 11px var(--mono); color: var(--text3);
+  margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.fg-zone-drop {
+  min-height: 36px; display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 4px; border-radius: 6px;
+  border: 2px dashed transparent; transition: border-color 0.15s, background 0.15s;
+}
+.fg-zone-drop.drag-over {
+  border-color: var(--accent); background: var(--accent-dim);
+}
+.fg-fixed-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.fg-fixed-sub {
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); padding: 6px 8px;
+}
+.fg-sub-label {
+  font: 600 10px var(--mono); color: var(--text3);
+  margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.fg-axis-row { display: flex; gap: 10px; }
+.fg-zone-half { flex: 1; }
+
+/* ─── Chips ─── */
+.fg-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 5px;
+  background: var(--surface2); border: 1px solid var(--border);
+  font: 600 11px var(--mono); color: var(--text1);
+  cursor: grab; user-select: none; transition: box-shadow 0.15s;
+}
+.fg-chip:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.25); }
+.fg-chip.dragging { opacity: 0.4; }
+.fg-chip.insert-before { box-shadow: -3px 0 0 0 var(--accent); }
+.fg-chip.insert-after  { box-shadow:  3px 0 0 0 var(--accent); }
+.fg-chip-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent-dim); color: var(--accent);
+  font: 700 9px var(--mono); flex-shrink: 0;
+}
+.fg-chip-label { pointer-events: none; }
+.fg-chip-input {
+  padding: 2px 6px; border-radius: 3px; border: 1px solid var(--border);
+  background: var(--bg); color: var(--text1); font: 400 11px var(--mono);
+  width: 70px;
+}
+.fg-chip-input:focus { border-color: var(--accent); outline: none; }
+
+/* ─── Actions & Preview ─── */
+.fg-actions { display: flex; gap: 8px; align-items: center; }
+.fg-xml-preview {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 16px; overflow: auto; max-height: 60vh;
+  font: 400 12px var(--mono); color: var(--text2);
+  white-space: pre; tab-size: 2;
+}
+
 /* ─── Empty state ─── */
 .empty-state {
   display: flex; flex-direction: column; align-items: center; justify-content: center;

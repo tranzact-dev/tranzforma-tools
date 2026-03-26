@@ -238,7 +238,7 @@ function parseForms(doc) {
           flLabel, flName: flNameStr, formLabel,
           formNameJa: '', formNameEn: '',
           reflectCalc: '', import: '', export: '',
-          parameters: '', triggers: '',
+          parameters: '', triggers: '', drillDowns: '',
           updateLedger: '', updateType: '', resolvedAt: '', relatedLedgers: '',
           xml: xmlContent
         };
@@ -264,6 +264,15 @@ function parseForms(doc) {
                   const label = el.querySelector('label')?.textContent || '';
                   return `${type}:${label}`;
                 }).join(',');
+
+              // Drill-down targets
+              const ddForms = new Set();
+              for (const dd of root.querySelectorAll('drill-down-spec')) {
+                if (dd.querySelector('enabled')?.textContent !== 'true') continue;
+                const target = dd.querySelector('form')?.textContent?.trim();
+                if (target) ddForms.add(target);
+              }
+              fd.drillDowns = [...ddForms].join(',');
 
               // UPDATE_LEDGER resolution
               const ledgerInfo = resolveLedger(root);
@@ -412,7 +421,7 @@ function onApdLoaded(side, text, fileName) {
     dropEl.querySelector('.drop-filename').textContent =
       `${fileName} (フォーム:${data.forms.length} / 台帳:${data.ledgers.length} / 変換表:${data.transTables.length} / スクリプト:${data.scripts.length})`;
 
-    ['list', 'ledger', 'trans', 'script', 'graph'].forEach(t =>
+    ['list', 'ledger', 'trans', 'script', 'graph', 'formgen'].forEach(t =>
       document.getElementById(`${t}Btn${side}`).disabled = false
     );
     document.getElementById('compareBtn').disabled = !(apdA && apdB);
@@ -434,7 +443,7 @@ setupDrop('dropB', 'fileB', (t, f) => onApdLoaded('B', t, f));
 // ═══════════════════════════════════════════════════════════════════
 // Result visibility
 // ═══════════════════════════════════════════════════════════════════
-const RESULT_TYPES = ['list', 'ledger', 'trans', 'script', 'graph', 'compare'];
+const RESULT_TYPES = ['list', 'ledger', 'trans', 'script', 'graph', 'formgen', 'compare'];
 
 function showResult(type) {
   RESULT_TYPES.forEach(t =>
@@ -863,81 +872,188 @@ function esc(s) {
 // ═══════════════════════════════════════════════════════════════════
 let cyInstance = null;
 
+/**
+ * スクリプト本文 (SCRIPT_TEXT) から参照しているフォームラベルを抽出する。
+ * scriptText はプレーンテキスト形式で forms!LABEL.calculate(...) / forms!LABEL(...) を含む。
+ * ※ fusion_place ではスクリプトから別スクリプトの呼び出しは不可。
+ */
+function parseScriptFormRefs(scriptText) {
+  if (!scriptText) return [];
+  const formSet = new Set();
+  // forms!LABEL or forms!'LABEL' (シングルクォート囲みに対応)
+  for (const m of scriptText.matchAll(/forms!'([^']+)'/g)) {
+    formSet.add(m[1]);
+  }
+  for (const m of scriptText.matchAll(/forms!([A-Za-z0-9_]+)/g)) {
+    formSet.add(m[1]);
+  }
+  return [...formSet];
+}
+
 function buildGraphData(apd, flFilter, includeBK) {
   const nodes = [];
   const edges = [];
   const ledgerSet   = new Set();
   const scriptSet   = new Set();
+  const formNodeSet = new Set();
+  const edgeIdSet   = new Set();
 
-  let forms = apd.forms;
-  if (flFilter) forms = forms.filter(f => f.flLabel === flFilter);
-  if (!includeBK) forms = forms.filter(f => !f.formLabel.includes('_BK'));
+  // ルックアップ用マップ
+  const allFormLabels   = new Set(apd.forms.map(f => f.formLabel));
+  const allScriptLabels = new Set(apd.scripts.map(s => s.label));
+  const formByLabel     = new Map(apd.forms.map(f => [f.formLabel, f]));
+  const scriptByLabel   = new Map(apd.scripts.map(s => [s.label, s]));
 
-  // Collect all ledger and script nodes from forms
-  for (const f of forms) {
-    // Form node
-    nodes.push({
-      data: {
-        id: `form:${f.formLabel}`,
-        label: f.formLabel,
-        type: 'form',
-        nameJa: f.formNameJa,
-        flLabel: f.flLabel,
-      }
-    });
+  let seedForms = apd.forms;
+  if (flFilter) seedForms = seedForms.filter(f => f.flLabel === flFilter);
+  if (!includeBK) seedForms = seedForms.filter(f => !f.formLabel.includes('_BK'));
 
-    // Related ledgers → source edges
-    if (f.relatedLedgers) {
-      for (const ledger of f.relatedLedgers.split(',')) {
-        ledgerSet.add(ledger);
-        edges.push({
-          data: {
-            id: `source:${f.formLabel}:${ledger}`,
-            source: `form:${f.formLabel}`,
-            target: `ledger:${ledger}`,
-            type: 'source',
-          }
-        });
-      }
-    }
-
-    // Update ledger → update edges (may overlap with source, separate edge type)
-    if (f.updateLedger) {
-      for (const ledger of f.updateLedger.split(',')) {
-        ledgerSet.add(ledger);
-        edges.push({
-          data: {
-            id: `update:${f.formLabel}:${ledger}`,
-            source: `form:${f.formLabel}`,
-            target: `ledger:${ledger}`,
-            type: 'update',
-            updateType: f.updateType,
-          }
-        });
-      }
-    }
-
-    // Triggers → script edges
-    if (f.triggers) {
-      for (const trigger of f.triggers.split(',')) {
-        const m = trigger.match(/^RUN_SCRIPT:(.+)$/);
-        if (m) {
-          const scriptLabel = m[1];
-          scriptSet.add(scriptLabel);
-          edges.push({
-            data: {
-              id: `trigger:${f.formLabel}:${scriptLabel}`,
-              source: `form:${f.formLabel}`,
-              target: `script:${scriptLabel}`,
-              type: 'trigger',
-            }
-          });
-        }
+  // ── 起点スクリプトの収集 ──
+  // フォームリストフィルタ時のみ: seedForms のラベルを参照しているスクリプトも起点に追加
+  // フィルタなしの場合は全フォームが起点なのでトリガー経由でスクリプトに到達する
+  const seedFormLabels = new Set(seedForms.map(f => f.formLabel));
+  const seedScripts = [];
+  if (flFilter) {
+    for (const s of apd.scripts) {
+      const refs = parseScriptFormRefs(s.scriptText);
+      if (refs.some(label => seedFormLabels.has(label))) {
+        seedScripts.push(s.label);
       }
     }
   }
 
-  // Ledger nodes
+  // ── 再帰探索用キュー ──
+  const formQueue   = [...seedFormLabels];
+  const scriptQueue = [...seedScripts];
+  const processedForms   = new Set();
+  const processedScripts = new Set();
+
+  function addEdge(id, source, target, type, extra) {
+    if (edgeIdSet.has(id)) return;
+    edgeIdSet.add(id);
+    edges.push({ data: { id, source, target, type, ...extra } });
+  }
+
+  function ensureFormNode(formLabel) {
+    if (formNodeSet.has(formLabel)) return;
+    formNodeSet.add(formLabel);
+    const f = formByLabel.get(formLabel);
+    nodes.push({
+      data: {
+        id: `form:${formLabel}`,
+        label: formLabel,
+        type: 'form',
+        nameJa: f?.formNameJa || '',
+        flLabel: f?.flLabel || '',
+      }
+    });
+  }
+
+  function ensureScriptNode(label) {
+    if (scriptSet.has(label)) return;
+    scriptSet.add(label);
+    const s = scriptByLabel.get(label);
+    nodes.push({
+      data: {
+        id: `script:${label}`,
+        label: label,
+        type: 'script',
+        nameJa: s?.nameJa || '',
+      }
+    });
+  }
+
+  // ── フォーム・スクリプトのトリガーチェーンを再帰的にたどる ──
+  function processForm(formLabel) {
+    if (processedForms.has(formLabel)) return;
+    processedForms.add(formLabel);
+
+    if (!includeBK && formLabel.includes('_BK')) return;
+
+    const f = formByLabel.get(formLabel);
+    if (!f) return;
+
+    ensureFormNode(formLabel);
+
+    // Related ledgers → source edges (台帳→フォームへデータが流れる)
+    if (f.relatedLedgers) {
+      for (const ledger of f.relatedLedgers.split(',')) {
+        ledgerSet.add(ledger);
+        addEdge(`source:${ledger}:${formLabel}`,
+          `ledger:${ledger}`, `form:${formLabel}`, 'source');
+      }
+    }
+
+    // Update ledger → update edges
+    if (f.updateLedger) {
+      for (const ledger of f.updateLedger.split(',')) {
+        ledgerSet.add(ledger);
+        addEdge(`update:${formLabel}:${ledger}`,
+          `form:${formLabel}`, `ledger:${ledger}`, 'update',
+          { updateType: f.updateType });
+      }
+    }
+
+    // Triggers → script / form edges
+    if (f.triggers) {
+      for (const trigger of f.triggers.split(',')) {
+        const colonIdx = trigger.indexOf(':');
+        if (colonIdx < 0) continue;
+        const trigType = trigger.slice(0, colonIdx);
+        const label    = trigger.slice(colonIdx + 1);
+        if (!label) continue;
+
+        if (trigType === 'RUN_SCRIPT' || allScriptLabels.has(label)) {
+          ensureScriptNode(label);
+          addEdge(`trigger:${formLabel}:${label}`,
+            `form:${formLabel}`, `script:${label}`, 'trigger',
+            { triggerType: trigType });
+          scriptQueue.push(label);
+        } else if (allFormLabels.has(label)) {
+          ensureFormNode(label);
+          addEdge(`trigger:${formLabel}:${label}`,
+            `form:${formLabel}`, `form:${label}`, 'trigger',
+            { triggerType: trigType });
+          formQueue.push(label);
+        }
+      }
+    }
+
+    // Drill-down → form edges
+    if (f.drillDowns) {
+      for (const target of f.drillDowns.split(',')) {
+        if (!target) continue;
+        ensureFormNode(target);
+        addEdge(`drilldown:${formLabel}:${target}`,
+          `form:${formLabel}`, `form:${target}`, 'drilldown');
+        formQueue.push(target);
+      }
+    }
+  }
+
+  function processScript(scriptLabel) {
+    if (processedScripts.has(scriptLabel)) return;
+    processedScripts.add(scriptLabel);
+
+    const script = scriptByLabel.get(scriptLabel);
+    if (!script?.scriptText) return;
+
+    for (const targetForm of parseScriptFormRefs(script.scriptText)) {
+      ensureFormNode(targetForm);
+      addEdge(`trigger:${scriptLabel}:${targetForm}`,
+        `script:${scriptLabel}`, `form:${targetForm}`, 'trigger',
+        { triggerType: 'CALL_FORM' });
+      formQueue.push(targetForm);
+    }
+  }
+
+  // 両キューが空になるまで交互に処理（相互参照に対応）
+  while (formQueue.length > 0 || scriptQueue.length > 0) {
+    while (formQueue.length > 0) processForm(formQueue.shift());
+    while (scriptQueue.length > 0) processScript(scriptQueue.shift());
+  }
+
+  // ── 元帳ノード ──
   for (const label of ledgerSet) {
     const ledgerInfo = apd.ledgers.find(l => l.label === label);
     nodes.push({
@@ -946,19 +1062,6 @@ function buildGraphData(apd, flFilter, includeBK) {
         label: label,
         type: 'ledger',
         nameJa: ledgerInfo?.nameJa || '',
-      }
-    });
-  }
-
-  // Script nodes
-  for (const label of scriptSet) {
-    const scriptInfo = apd.scripts.find(s => s.label === label);
-    nodes.push({
-      data: {
-        id: `script:${label}`,
-        label: label,
-        type: 'script',
-        nameJa: scriptInfo?.nameJa || '',
       }
     });
   }
@@ -979,9 +1082,15 @@ function renderGraphResult(side) {
 
   // Populate form-list filter
   const flSelect = document.getElementById('graphFlFilter');
-  const flLabels = [...new Set(apd.forms.map(f => f.flLabel))].sort();
+  const flMap = new Map();
+  for (const f of apd.forms) {
+    if (!flMap.has(f.flLabel)) flMap.set(f.flLabel, f.flName || '');
+  }
+  const flEntries = [...flMap.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   flSelect.innerHTML = '<option value="">すべてのフォームリスト</option>'
-    + flLabels.map(fl => `<option value="${esc(fl)}">${esc(fl)}</option>`).join('');
+    + flEntries.map(([label, name]) =>
+        `<option value="${esc(label)}">${esc(label)}${name ? ' / ' + esc(name) : ''}</option>`
+      ).join('');
 
   drawGraph(apd);
 }
@@ -1003,12 +1112,13 @@ function drawGraph(apd) {
     `[APD-${activeResult.side}] 元帳:${ledgerCount} / フォーム:${formCount} / スクリプト:${scriptCount} / エッジ:${edges.length}`;
 
   // Remove source edges if a corresponding update edge exists (avoid duplicate lines)
-  const updateEdgeKeys = new Set(
+  // source: ledger→form, update: form→ledger なので正規化して比較
+  const updateEdgePairs = new Set(
     edges.filter(e => e.data.type === 'update')
-      .map(e => `${e.data.source}→${e.data.target}`)
+      .map(e => `${e.data.target}→${e.data.source}`)   // ledger→form に正規化
   );
   const filteredEdges = edges.filter(e =>
-    e.data.type !== 'source' || !updateEdgeKeys.has(`${e.data.source}→${e.data.target}`)
+    e.data.type !== 'source' || !updateEdgePairs.has(`${e.data.source}→${e.data.target}`)
   );
 
   if (cyInstance) cyInstance.destroy();
@@ -1102,6 +1212,15 @@ function drawGraph(apd) {
           'width': 1.2,
         }
       },
+      {
+        selector: 'edge[type="drilldown"]',
+        style: {
+          'line-color': '#4a90c4',
+          'target-arrow-color': '#4a90c4',
+          'line-style': 'dashed',
+          'width': 1,
+        }
+      },
       // ── Hover / Selection ──
       {
         selector: 'node:selected',
@@ -1169,15 +1288,21 @@ function copyEdgeListTSV() {
   if (!apd) return;
   const flFilter  = document.getElementById('graphFlFilter').value || null;
   const includeBK = document.getElementById('graphIncludeBK').checked;
-  const { edges } = buildGraphData(apd, flFilter, includeBK);
+  const { nodes, edges } = buildGraphData(apd, flFilter, includeBK);
 
-  const header = 'FROM_TYPE\tFROM_LABEL\tTO_TYPE\tTO_LABEL\tEDGE_TYPE\tDETAIL';
+  // ノードIDから名前を引くマップ
+  const nameMap = new Map(nodes.map(n => [n.data.id, n.data.nameJa || '']));
+
+  const header = 'FROM_TYPE\tFROM_LABEL\tFROM_NAME\tTO_TYPE\tTO_LABEL\tTO_NAME\tEDGE_TYPE\tDETAIL';
   const rows = edges.map(e => {
     const d = e.data;
     const [fromType, fromLabel] = d.source.split(':');
     const [toType, toLabel]     = d.target.split(':');
-    const detail = d.type === 'update' ? (d.updateType || '') : '';
-    return [fromType, fromLabel, toType, toLabel, d.type, detail].join('\t');
+    const fromName = nameMap.get(d.source) || '';
+    const toName   = nameMap.get(d.target) || '';
+    const detail = d.type === 'update' ? (d.updateType || '')
+                 : d.type === 'trigger' ? (d.triggerType || '') : '';
+    return [fromType, fromLabel, fromName, toType, toLabel, toName, d.type, detail].join('\t');
   });
   copyText([header, ...rows].join('\r\n'), 'エッジリストTSVをコピーしました');
 }
@@ -1207,8 +1332,8 @@ function downloadGraphSVG() {
   const nodeBg     = { ledger: '#2d6b4f', form: '#2d4a7a', script: '#6b5a2d' };
   const nodeBorder = { ledger: '#3d9b6e', form: '#4a78c4', script: '#a08040' };
   const nodeText   = { ledger: '#6ec99e', form: '#7aacef', script: '#d4b060' };
-  const edgeColors = { source: '#3a3f52', update: '#a08040', trigger: '#7a50b0' };
-  const edgeDash   = { source: 'stroke-dasharray="4 3"', update: '', trigger: 'stroke-dasharray="8 4"' };
+  const edgeColors = { source: '#3a3f52', update: '#a08040', trigger: '#7a50b0', drilldown: '#4a90c4' };
+  const edgeDash   = { source: 'stroke-dasharray="4 3"', update: '', trigger: 'stroke-dasharray="8 4"', drilldown: 'stroke-dasharray="6 3"' };
   let svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${ox} ${oy} ${w} ${h}" font-family="'IBM Plex Mono', monospace">\n`;
   svg += `<defs><filter id="shadow"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.4"/></filter></defs>\n`;
   svg += `<rect x="${ox}" y="${oy}" width="${w}" height="${h}" fill="#0c0e14"/>\n`;
@@ -1315,4 +1440,450 @@ function setupOverlayTracking() {
     }
   };
   cyInstance.on('pan zoom', update);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// フォーム生成 (POC) — ドラッグ&ドロップ式ディメンション配置
+// ═══════════════════════════════════════════════════════════════════
+let fgState = {
+  side: null,
+  ledger: null,
+  // dimLabel → { zone, fixedValue, paramList }
+  dims: {},
+  // 順序を管理するゾーン（fixed/unassigned はラベル昇順なので不要）
+  order: { parameter: [], 'row-loop': [], 'column-loop': [] },
+};
+
+const FG_ZONES = ['unassigned', 'fixed', 'fixed-total', 'fixed-none', 'parameter', 'row-loop', 'column-loop'];
+const FG_ORDERED_ZONES = ['parameter', 'row-loop', 'column-loop'];
+
+function renderFormGenResult(side) {
+  const apd = side === 'A' ? apdA : apdB;
+  if (!apd) return;
+  fgState.side = side;
+  activeResult = { type: 'formgen', side };
+  showResult('formgen');
+
+  const sel = document.getElementById('fgLedger');
+  sel.innerHTML = '<option value="">-- 選択 --</option>'
+    + apd.ledgers.map(l =>
+        `<option value="${esc(l.label)}">${esc(l.label)}${l.nameJa ? ' / ' + esc(l.nameJa) : ''}</option>`
+      ).join('');
+
+  document.getElementById('fgFormLabel').value = '';
+  document.getElementById('fgFormNameJa').value = '';
+  document.getElementById('fgXmlOutput').textContent = '';
+  document.getElementById('fgXmlPreview').style.display = 'none';
+  document.getElementById('fgCopyBtn').style.display = 'none';
+  document.getElementById('fgDlBtn').style.display = 'none';
+  fgState.ledger = null;
+  fgState.dims = {};
+  fgState.order = { parameter: [], 'row-loop': [], 'column-loop': [] };
+  fgClearBoard();
+  fgSetupDropZones();
+}
+
+function fgSelectLedger() {
+  const apd = fgState.side === 'A' ? apdA : apdB;
+  const label = document.getElementById('fgLedger').value;
+  const ledger = apd.ledgers.find(l => l.label === label);
+  fgState.ledger = ledger || null;
+  fgState.dims = {};
+  fgState.order = { parameter: [], 'row-loop': [], 'column-loop': [] };
+  fgClearBoard();
+
+  if (!ledger) return;
+
+  // デフォルトのラベルと名称
+  document.getElementById('fgFormLabel').value = 'TRANZFORMA00';
+  const now = new Date();
+  const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+  document.getElementById('fgFormNameJa').value = ts;
+
+  // 初期配置
+  const paramDims = [];
+  for (const dim of ledger.dims) {
+    if (dim === '#VIEW') {
+      fgState.dims[dim] = { zone: 'fixed', fixedValue: 'PER', paramList: '#ALL' };
+    } else if (dim === '#CHANGE') {
+      fgState.dims[dim] = { zone: 'fixed', fixedValue: '#NONE', paramList: '#ALL' };
+    } else if (dim === '#FY' || dim === '#PERIOD' || dim === '#SCENARIO') {
+      fgState.dims[dim] = { zone: 'parameter', fixedValue: '', paramList: '#ALL' };
+      paramDims.push(dim);
+    } else {
+      fgState.dims[dim] = { zone: 'unassigned', fixedValue: '', paramList: '#ALL' };
+    }
+  }
+  // パラメータの初期順序: #FY → #PERIOD → #SCENARIO
+  const paramOrder = ['#FY', '#PERIOD', '#SCENARIO'];
+  fgState.order.parameter = paramOrder.filter(d => paramDims.includes(d));
+
+  fgRenderChips();
+}
+
+// ── ゾーンの表示順序を取得 ──
+function fgGetDimsInZone(zone) {
+  const dimsInZone = Object.entries(fgState.dims)
+    .filter(([, d]) => d.zone === zone)
+    .map(([dim]) => dim);
+
+  if (['fixed', 'fixed-total', 'fixed-none', 'unassigned'].includes(zone)) {
+    // ラベル昇順
+    return dimsInZone.sort();
+  }
+  // 順序管理ゾーン: order 配列の順に並べ、order にないものは末尾に追加
+  const order = fgState.order[zone] || [];
+  const ordered = [];
+  for (const dim of order) {
+    if (dimsInZone.includes(dim)) ordered.push(dim);
+  }
+  for (const dim of dimsInZone) {
+    if (!ordered.includes(dim)) ordered.push(dim);
+  }
+  return ordered;
+}
+
+function fgClearBoard() {
+  for (const zone of FG_ZONES) {
+    const drop = document.querySelector(`.fg-zone-drop[data-zone="${zone}"]`);
+    if (drop) drop.innerHTML = '';
+  }
+}
+
+function fgRenderChips() {
+  fgClearBoard();
+  for (const zone of FG_ZONES) {
+    const drop = document.querySelector(`.fg-zone-drop[data-zone="${zone}"]`);
+    if (!drop) continue;
+    for (const dim of fgGetDimsInZone(zone)) {
+      drop.appendChild(fgCreateChip(dim, fgState.dims[dim]));
+    }
+  }
+}
+
+function fgCreateChip(dim, info) {
+  const chip = document.createElement('div');
+  chip.className = 'fg-chip';
+  chip.draggable = true;
+  chip.dataset.dim = dim;
+
+  const label = document.createElement('span');
+  label.className = 'fg-chip-label';
+  label.textContent = dim;
+  chip.appendChild(label);
+
+  if (info.zone === 'fixed') {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'fg-chip-input';
+    input.value = info.fixedValue || '';
+    input.placeholder = 'value';
+    input.addEventListener('input', () => { fgState.dims[dim].fixedValue = input.value; });
+    input.addEventListener('mousedown', e => e.stopPropagation());
+    chip.appendChild(input);
+  } else if (info.zone === 'parameter') {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'fg-chip-input';
+    input.value = info.paramList || '#ALL';
+    input.placeholder = '#ALL';
+    input.addEventListener('input', () => { fgState.dims[dim].paramList = input.value; });
+    input.addEventListener('mousedown', e => e.stopPropagation());
+    chip.appendChild(input);
+  }
+
+  // 順序付きゾーンでは番号を表示
+  if (FG_ORDERED_ZONES.includes(info.zone)) {
+    const order = fgState.order[info.zone] || [];
+    const idx = order.indexOf(dim);
+    if (idx >= 0) {
+      const num = document.createElement('span');
+      num.className = 'fg-chip-num';
+      num.textContent = idx + 1;
+      chip.prepend(num);
+    }
+  }
+
+  chip.addEventListener('dragstart', e => {
+    e.dataTransfer.setData('text/plain', dim);
+    chip.classList.add('dragging');
+  });
+  chip.addEventListener('dragend', () => {
+    chip.classList.remove('dragging');
+  });
+
+  return chip;
+}
+
+function fgSetupDropZones() {
+  for (const zone of FG_ZONES) {
+    const drop = document.querySelector(`.fg-zone-drop[data-zone="${zone}"]`);
+    if (!drop) continue;
+
+    drop.addEventListener('dragover', e => {
+      e.preventDefault();
+      drop.classList.add('drag-over');
+
+      // 順序付きゾーン: ドロップ位置のインジケーターを表示
+      if (FG_ORDERED_ZONES.includes(zone)) {
+        fgUpdateInsertIndicator(drop, e.clientX);
+      }
+    });
+    drop.addEventListener('dragleave', e => {
+      // 子要素への移動でleaveが発火するのを防ぐ
+      if (!drop.contains(e.relatedTarget)) {
+        drop.classList.remove('drag-over');
+        fgClearInsertIndicator(drop);
+      }
+    });
+    drop.addEventListener('drop', e => {
+      e.preventDefault();
+      drop.classList.remove('drag-over');
+      fgClearInsertIndicator(drop);
+      const dim = e.dataTransfer.getData('text/plain');
+      if (!dim || !fgState.dims[dim]) return;
+
+      const oldZone = fgState.dims[dim].zone;
+
+      // 旧ゾーンの order から削除
+      if (FG_ORDERED_ZONES.includes(oldZone)) {
+        const arr = fgState.order[oldZone];
+        const idx = arr.indexOf(dim);
+        if (idx >= 0) arr.splice(idx, 1);
+      }
+
+      // ゾーン変更
+      fgState.dims[dim].zone = zone;
+
+      // 固定値の自動設定
+      if (zone === 'fixed') {
+        if (dim === '#VIEW' && !fgState.dims[dim].fixedValue) fgState.dims[dim].fixedValue = 'PER';
+        if (dim === '#CHANGE' && !fgState.dims[dim].fixedValue) fgState.dims[dim].fixedValue = '#NONE';
+      } else if (zone === 'fixed-total') {
+        fgState.dims[dim].fixedValue = 'TOTAL';
+      } else if (zone === 'fixed-none') {
+        fgState.dims[dim].fixedValue = 'NONE';
+      } else {
+        // 他ゾーンに移動した場合は固定値をクリア（#VIEW/#CHANGEは除く）
+        if (dim !== '#VIEW' && dim !== '#CHANGE') fgState.dims[dim].fixedValue = '';
+      }
+
+      // 新ゾーンの order に挿入
+      if (FG_ORDERED_ZONES.includes(zone)) {
+        const insertIdx = fgCalcInsertIndex(drop, e.clientX, dim);
+        fgState.order[zone].splice(insertIdx, 0, dim);
+      }
+
+      fgRenderChips();
+    });
+  }
+}
+
+// ── ゾーン内の挿入位置を計算 ──
+function fgCalcInsertIndex(dropEl, clientX, dragDim) {
+  const chips = [...dropEl.querySelectorAll('.fg-chip')].filter(c => c.dataset.dim !== dragDim);
+  for (let i = 0; i < chips.length; i++) {
+    const rect = chips[i].getBoundingClientRect();
+    if (clientX < rect.left + rect.width / 2) return i;
+  }
+  return chips.length;
+}
+
+function fgUpdateInsertIndicator(dropEl, clientX) {
+  fgClearInsertIndicator(dropEl);
+  const chips = [...dropEl.querySelectorAll('.fg-chip:not(.dragging)')];
+  for (const chip of chips) {
+    const rect = chip.getBoundingClientRect();
+    if (clientX < rect.left + rect.width / 2) {
+      chip.classList.add('insert-before');
+      return;
+    }
+  }
+  // 末尾
+  if (chips.length > 0) chips[chips.length - 1].classList.add('insert-after');
+}
+
+function fgClearInsertIndicator(dropEl) {
+  for (const chip of dropEl.querySelectorAll('.fg-chip')) {
+    chip.classList.remove('insert-before', 'insert-after');
+  }
+}
+
+// ── XML 生成 ──
+function fgGenerate() {
+  if (!fgState.ledger) { showToast('元帳を選択してください', 'error'); return; }
+  const formLabel = document.getElementById('fgFormLabel').value.trim();
+  const nameJa = document.getElementById('fgFormNameJa').value.trim();
+  if (!formLabel) { showToast('フォームラベルを入力してください', 'error'); return; }
+
+  // 未割り当てチェック
+  const unassigned = Object.entries(fgState.dims).filter(([, d]) => d.zone === 'unassigned');
+  if (unassigned.length > 0) {
+    showToast(`未割り当て: ${unassigned.map(([d]) => d).join(', ')}`, 'error'); return;
+  }
+
+  const assigns = fgState.dims;
+  const ledger = fgState.ledger;
+
+  // source-member-tuple（ラベル昇順）
+  const fixedParts = [
+    ...fgGetDimsInZone('fixed').filter(dim => assigns[dim].fixedValue).map(dim => `${dim}=${assigns[dim].fixedValue}`),
+    ...fgGetDimsInZone('fixed-total').map(dim => `${dim}=TOTAL`),
+    ...fgGetDimsInZone('fixed-none').map(dim => `${dim}=NONE`),
+  ].sort();
+  const sourceTuple = `{${fixedParts.join(', ')}}`;
+
+  // name
+  const nameStr = nameJa ? `ja;"${nameJa}"` : '';
+
+  // 順序付きで取得
+  const params  = fgGetDimsInZone('parameter').map(d => [d, assigns[d]]);
+  const rowLoops = fgGetDimsInZone('row-loop').map(d => [d, assigns[d]]);
+  const colLoops = fgGetDimsInZone('column-loop').map(d => [d, assigns[d]]);
+
+  let idCounter = 1;
+  const nextId = () => idCounter++;
+
+  let xml = `<?xml version="1.0" encoding="UTF-8"?><document-spec label="${escXmlAttr(formLabel)}">\n`;
+  xml += `  <name>${escXml(nameStr)}</name>\n`;
+  xml += `  <source-ledger-label>${escXml(ledger.label)}</source-ledger-label>\n`;
+  xml += `  <source-member-tuple>${escXml(sourceTuple)}</source-member-tuple>\n`;
+  xml += `  <format>\n    <scale>0</scale>\n    <pattern>###,##0</pattern>\n  </format>\n`;
+  xml += `  <report-format>\n`;
+  xml += `    <page-size>A4</page-size>\n`;
+  xml += `    <orientation>LANDSCAPE</orientation>\n`;
+  xml += `    <suppress-row-title-headings>false</suppress-row-title-headings>\n`;
+  xml += `    <row-title-width>16</row-title-width>\n`;
+  xml += `    <row-title-indent>8</row-title-indent>\n`;
+  xml += `    <row-wise-loop-layout>FIRST_DETAILS</row-wise-loop-layout>\n`;
+  xml += `    <column-title-height>2</column-title-height>\n`;
+  xml += `    <unit-indication/>\n`;
+  xml += `  </report-format>\n`;
+  xml += `  <flow-end-and-bal-net-writable>false</flow-end-and-bal-net-writable>\n`;
+
+  if (params.length > 0) {
+    xml += `  <parameter-specs>\n`;
+    for (const [dim, a] of params) {
+      xml += `    <parameter-spec>\n`;
+      xml += `      <title></title>\n`;
+      xml += `      <member-list-spec>\n`;
+      xml += `        <dimension-label>${escXml(dim)}</dimension-label>\n`;
+      xml += `        <type>EXPR</type>\n`;
+      xml += `        <member-list-expression>\n`;
+      xml += `          <peg-member type="ALL"/>\n`;
+      xml += `          <expansion-method include-peg="true" method="NONE_EXPANSION" parent-first="true"/>\n`;
+      xml += `          <member-criteria>#LEAF="TRUE"</member-criteria>\n`;
+      xml += `        </member-list-expression>\n`;
+      xml += `      </member-list-spec>\n`;
+      xml += `    </parameter-spec>\n`;
+    }
+    xml += `  </parameter-specs>\n`;
+  }
+
+  xml += fgBuildAxisXml('column', colLoops, nextId);
+  xml += fgBuildAxisXml('row', rowLoops, nextId);
+
+  xml += `  <import-spec>\n`;
+  xml += `    <enabled>false</enabled>\n`;
+  xml += `    <transformation-spec>\n`;
+  xml += `      <source-field-specs/>\n`;
+  xml += `      <derived-field-specs/>\n`;
+  xml += `    </transformation-spec>\n`;
+  xml += `  </import-spec>\n`;
+  xml += `  <export-spec>\n`;
+  xml += `    <enabled>false</enabled>\n`;
+  xml += `    <suppress-column-headers>false</suppress-column-headers>\n`;
+  xml += `    <suppress-row-headers>false</suppress-row-headers>\n`;
+  xml += `  </export-spec>\n`;
+  xml += `</document-spec>`;
+
+  document.getElementById('fgXmlOutput').textContent = xml;
+  document.getElementById('fgXmlPreview').style.display = '';
+  document.getElementById('fgCopyBtn').style.display = '';
+  document.getElementById('fgDlBtn').style.display = '';
+  showToast('XMLを生成しました');
+}
+
+function fgBuildAxisXml(axis, loops, nextId) {
+  let xml = `  <${axis}-axis-spec>\n    <axis-spec>\n`;
+  if (loops.length > 0) {
+    // ネスト構造: 外→内の順にloop-specを入れ子にする
+    // 最内側のloop-specにcolumn-row-specを配置
+    xml += fgBuildNestedLoops(loops, 0, 6, nextId, axis);
+  } else {
+    const crsId = nextId();
+    xml += `      <column-row-spec id="${crsId}" suppressed="false" suppress-borders="false">\n`;
+    xml += `        <name></name>\n`;
+    xml += `        <title></title>\n`;
+    xml += `        <value-spec>\n`;
+    xml += `          <source-member-tuple>{}</source-member-tuple>\n`;
+    xml += `          <protected>false</protected>\n`;
+    xml += `          <reflect-calc>false</reflect-calc>\n`;
+    xml += `        </value-spec>\n`;
+    xml += `      </column-row-spec>\n`;
+  }
+  xml += `    </axis-spec>\n  </${axis}-axis-spec>\n`;
+  return xml;
+}
+
+function fgBuildNestedLoops(loops, depth, baseIndent, nextId, axis) {
+  const pad = ' '.repeat(baseIndent + depth * 4);
+  const [dim] = loops[depth];
+  const loopId = nextId();
+  const iap = axis === 'row' ? ' item-addition-prohibited="true"' : '';
+  let xml = `${pad}<loop-spec id="${loopId}"${iap} suppress-if-no-data="true">\n`;
+  xml += `${pad}    <member-list-spec>\n`;
+  xml += `${pad}        <dimension-label>${escXml(dim)}</dimension-label>\n`;
+  xml += `${pad}        <type>EXPR</type>\n`;
+  xml += `${pad}        <member-list-expression>\n`;
+  xml += `${pad}            <peg-member type="ALL"/>\n`;
+  xml += `${pad}            <expansion-method include-peg="true" method="NONE_EXPANSION" parent-first="true"/>\n`;
+  xml += `${pad}            <member-criteria>#LEAF="TRUE"</member-criteria>\n`;
+  xml += `${pad}        </member-list-expression>\n`;
+  xml += `${pad}        <member-list-label>#ALL</member-list-label>\n`;
+  xml += `${pad}    </member-list-spec>\n`;
+
+  if (depth < loops.length - 1) {
+    // 内側のループを再帰的にネスト
+    xml += fgBuildNestedLoops(loops, depth + 1, baseIndent, nextId, axis);
+  } else {
+    // 最内側: column-row-specを配置（タイトルにDIM!@CUR.descを自動設定）
+    const crsId = nextId();
+    const crsTitle = `en;"${dim}!@CUR.desc"`;
+    xml += `${pad}    <column-row-spec id="${crsId}" suppressed="false" suppress-borders="false">\n`;
+    xml += `${pad}        <name></name>\n`;
+    xml += `${pad}        <title>${escXml(crsTitle)}</title>\n`;
+    xml += `${pad}        <value-spec>\n`;
+    xml += `${pad}            <source-member-tuple>{}</source-member-tuple>\n`;
+    xml += `${pad}            <protected>false</protected>\n`;
+    xml += `${pad}            <reflect-calc>false</reflect-calc>\n`;
+    xml += `${pad}        </value-spec>\n`;
+    xml += `${pad}    </column-row-spec>\n`;
+  }
+
+  xml += `${pad}</loop-spec>\n`;
+  return xml;
+}
+
+function escXml(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function escXmlAttr(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function fgCopyXml() {
+  const xml = document.getElementById('fgXmlOutput').textContent;
+  copyText(xml, 'XMLをコピーしました');
+}
+
+function fgDownloadXml() {
+  const xml = document.getElementById('fgXmlOutput').textContent;
+  const label = document.getElementById('fgFormLabel').value.trim() || 'form';
+  const blob = new Blob([xml], { type: 'application/xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `${label}.xml`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast('XMLをダウンロードしました');
 }
