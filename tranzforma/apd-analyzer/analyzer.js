@@ -416,6 +416,11 @@ function onApdLoaded(side, text, fileName) {
     const data = { fileName, ...loadAPD(text) };
     if (side === 'A') apdA = data; else apdB = data;
 
+    // IndexedDB にも保存（非同期・エラーは無視）
+    if (typeof tfApdStore !== 'undefined') {
+      tfApdStore.save(fileName, text).catch(() => {});
+    }
+
     const dropEl = document.getElementById(`drop${side}`);
     dropEl.classList.add('loaded');
     dropEl.querySelector('.drop-filename').textContent =
@@ -2060,3 +2065,21 @@ function fgDownloadXml() {
   a.click(); URL.revokeObjectURL(url);
   showToast('XMLをダウンロードしました');
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// IndexedDB からの APD 自動ロード
+// ═══════════════════════════════════════════════════════════════════
+(async function autoLoadApd() {
+  if (typeof tfApdStore === 'undefined') return;
+  const selectedId = tfApdStore.getSelectedId();
+  if (!selectedId) return;
+  try {
+    const record = await tfApdStore.load(selectedId);
+    if (record && record.xmlText) {
+      onApdLoaded('A', record.xmlText, record.fileName);
+      showToast(`プロジェクト "${record.appLabel || record.fileName}" を自動ロードしました`);
+    }
+  } catch (e) {
+    console.warn('APD auto-load failed:', e);
+  }
+})();

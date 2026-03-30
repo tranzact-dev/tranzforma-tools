@@ -30,11 +30,26 @@ function handleApdFile(file) {
       showApdResult(file.name);
       populateFromApd();
       document.getElementById('step1-next').disabled = false;
+      // IndexedDB にも保存
+      if (typeof tfApdStore !== 'undefined') {
+        tfApdStore.save(file.name, e.target.result).catch(() => {});
+      }
     } catch (err) {
       showApdError(err.message);
     }
   };
   reader.readAsText(file, 'UTF-8');
+}
+
+function handleApdXml(xmlText, fileName) {
+  try {
+    apdData = parseAPD(xmlText);
+    showApdResult(fileName);
+    populateFromApd();
+    document.getElementById('step1-next').disabled = false;
+  } catch (err) {
+    showApdError(err.message);
+  }
 }
 
 function showApdResult(filename) {
@@ -407,5 +422,17 @@ document.addEventListener('DOMContentLoaded', () => {
     row.querySelector('.pov-val-wrap').classList.toggle('hidden', mode !== 'fixed');
     row.querySelector('.pov-loop-wrap').classList.toggle('hidden', mode !== 'loop');
   });
+
+  // IndexedDB からの APD 自動ロード
+  if (typeof tfApdStore !== 'undefined') {
+    const selectedId = tfApdStore.getSelectedId();
+    if (selectedId) {
+      tfApdStore.load(selectedId).then(record => {
+        if (record && record.xmlText && !apdData) {
+          handleApdXml(record.xmlText, record.fileName);
+        }
+      }).catch(() => {});
+    }
+  }
 
 });

@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="shared/common.css">
 <script src="shared/theme.js"></script>
 <script src="shared/auth.js"></script>
+<script src="shared/apd-store.js"></script>
 <style>
 body { justify-content: flex-start; }
 
@@ -91,6 +92,54 @@ body { justify-content: flex-start; }
 .news-text  { font: 400 13px var(--sans); color: var(--text2); line-height: 1.6; }
 .news-text strong { color: var(--text); font-weight: 600; }
 
+/* ─── Project Cards ─── */
+.project-grid {
+  display: flex; gap: 14px; flex-wrap: wrap;
+}
+.project-card {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 16px 18px; min-width: 160px; max-width: 220px;
+  background: var(--surface); border: 2px solid var(--border);
+  border-radius: 12px; cursor: pointer; transition: all 0.15s;
+  position: relative;
+}
+.project-card:hover { border-color: var(--accent); }
+.project-card.selected { border-color: var(--accent); background: var(--accent-dim); }
+.project-card .proj-name {
+  font: 700 14px var(--mono); color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.project-card .proj-meta {
+  font: 400 11px var(--mono); color: var(--text3); line-height: 1.5;
+}
+.project-card .proj-check {
+  position: absolute; top: 8px; right: 10px;
+  font-size: 14px; color: var(--accent); display: none;
+}
+.project-card.selected .proj-check { display: block; }
+.project-card .proj-delete {
+  position: absolute; top: 8px; right: 10px;
+  font: 500 14px var(--mono); color: var(--text3); background: none; border: none;
+  cursor: pointer; padding: 0 4px; line-height: 1; display: none;
+}
+.project-card:hover .proj-delete { display: block; }
+.project-card.selected:hover .proj-delete { display: none; }
+.project-card .proj-delete:hover { color: var(--error); }
+
+.project-add {
+  display: flex; align-items: center; justify-content: center;
+  min-width: 80px; min-height: 90px;
+  background: var(--surface); border: 2px dashed var(--border);
+  border-radius: 12px; cursor: pointer; transition: all 0.15s;
+  font: 400 28px var(--mono); color: var(--text3);
+}
+.project-add:hover { border-color: var(--accent); color: var(--accent); }
+
+.project-empty {
+  font: 400 13px var(--sans); color: var(--text3);
+  padding: 4px 0;
+}
+
 /* ─── Login Overlay ─── */
 .login-overlay {
   position: fixed; inset: 0; z-index: 1000;
@@ -151,6 +200,15 @@ body { justify-content: flex-start; }
 </header>
 
 <div class="portal-body">
+
+  <!-- Project (APD) Selector -->
+  <div>
+    <div class="section-label">Projects (APD)</div>
+    <div class="project-grid" id="projectGrid">
+      <!-- populated by JS -->
+    </div>
+    <input type="file" id="apdFileInput" accept=".apd,.xml,.txt" style="display:none">
+  </div>
 
   <!-- Tool Grid -->
   <div class="tool-grid">
@@ -313,6 +371,126 @@ body { justify-content: flex-start; }
   pwInput.addEventListener('keydown', function (e) {
     if (e.key === 'Enter') attempt();
   });
+})();
+
+// ─── Project (APD) Selector ───
+(function () {
+  const grid = document.getElementById('projectGrid');
+  const fileInput = document.getElementById('apdFileInput');
+
+  function formatDate(ts) {
+    if (!ts) return '';
+    const d = new Date(ts);
+    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+
+  async function render() {
+    const list = await tfApdStore.list();
+    const selectedId = tfApdStore.getSelectedId();
+    grid.innerHTML = '';
+
+    if (list.length === 0) {
+      const empty = document.createElement('span');
+      empty.className = 'project-empty';
+      empty.textContent = 'APDファイルをアップロードするとプロジェクトが表示されます';
+      grid.appendChild(empty);
+    }
+
+    for (const item of list) {
+      const card = document.createElement('div');
+      card.className = 'project-card' + (item.id === selectedId ? ' selected' : '');
+
+      const check = document.createElement('span');
+      check.className = 'proj-check';
+      check.textContent = '\u2713';
+      card.appendChild(check);
+
+      const del = document.createElement('button');
+      del.className = 'proj-delete';
+      del.textContent = '\u00d7';
+      del.title = '削除';
+      del.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await tfApdStore.remove(item.id);
+        if (selectedId === item.id) tfApdStore.setSelectedId(null);
+        render();
+      });
+      card.appendChild(del);
+
+      const name = document.createElement('div');
+      name.className = 'proj-name';
+      name.textContent = item.appLabel || item.fileName;
+      name.title = item.fileName;
+      card.appendChild(name);
+
+      const meta = document.createElement('div');
+      meta.className = 'proj-meta';
+      meta.textContent = `${item.formCount} forms / ${item.ledgerCount} ledgers`;
+      card.appendChild(meta);
+
+      const date = document.createElement('div');
+      date.className = 'proj-meta';
+      date.textContent = formatDate(item.updatedAt);
+      card.appendChild(date);
+
+      card.addEventListener('click', () => {
+        if (selectedId === item.id) {
+          tfApdStore.setSelectedId(null);
+        } else {
+          tfApdStore.setSelectedId(item.id);
+        }
+        render();
+      });
+
+      grid.appendChild(card);
+    }
+
+    // + ボタン
+    const addBtn = document.createElement('div');
+    addBtn.className = 'project-add';
+    addBtn.textContent = '+';
+    addBtn.title = 'APDファイルを追加';
+    addBtn.addEventListener('click', () => fileInput.click());
+    grid.appendChild(addBtn);
+  }
+
+  fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const xmlText = ev.target.result;
+      try {
+        // XMLとして最低限パースできるか確認
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(xmlText, 'application/xml');
+        if (doc.querySelector('parsererror')) throw new Error('XMLの構文エラー');
+        const id = await tfApdStore.save(file.name, xmlText);
+        tfApdStore.setSelectedId(id);
+        render();
+      } catch (err) {
+        alert('APDファイルの読み込みに失敗しました: ' + err.message);
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+    fileInput.value = '';
+  });
+
+  // ドラッグ&ドロップ対応
+  grid.addEventListener('dragover', (e) => { e.preventDefault(); });
+  grid.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) {
+      // fileInputのchangeイベントを再利用
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fileInput.files = dt.files;
+      fileInput.dispatchEvent(new Event('change'));
+    }
+  });
+
+  render();
 })();
 </script>
 
