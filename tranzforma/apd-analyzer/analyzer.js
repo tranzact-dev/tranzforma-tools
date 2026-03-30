@@ -450,6 +450,13 @@ function showResult(type) {
     document.getElementById(`${t}Result`).style.display = t === type ? '' : 'none'
   );
   document.getElementById('resultArea').style.display = '';
+  // 比較モードから個別分析に戻った場合、フォーム生成ボタンを再有効化
+  if (type !== 'compare') {
+    ['A', 'B'].forEach(s => {
+      const apd = s === 'A' ? apdA : apdB;
+      if (apd) document.getElementById(`formgenBtn${s}`).disabled = false;
+    });
+  }
 }
 
 function hideAllResults() {
@@ -745,6 +752,8 @@ function runCompare() {
   showResult('compare');
   renderCompareResults();
   updateMigrateInfo();
+  // 差分比較中はフォーム生成ボタンを非活性化（比較中に新規フォーム作成のユースケースは無い）
+  ['A', 'B'].forEach(s => document.getElementById(`formgenBtn${s}`).disabled = true);
   showToast(`比較完了: ${compareResults.length}件`);
 }
 
@@ -1452,6 +1461,10 @@ let fgState = {
   dims: {},
   // 順序を管理するゾーン（fixed/unassigned はラベル昇順なので不要）
   order: { parameter: [], 'row-loop': [], 'column-loop': [] },
+  // 複数選択中のディメンション
+  selected: new Set(),
+  // 軸に残しつつパラメータにも複製されたディメンション（POV起点パターン）
+  povParams: new Set(),
 };
 
 const FG_ZONES = ['unassigned', 'fixed', 'fixed-total', 'fixed-none', 'parameter', 'row-loop', 'column-loop'];
@@ -1479,6 +1492,8 @@ function renderFormGenResult(side) {
   fgState.ledger = null;
   fgState.dims = {};
   fgState.order = { parameter: [], 'row-loop': [], 'column-loop': [] };
+  fgState.selected = new Set();
+  fgState.povParams = new Set();
   fgClearBoard();
   fgSetupDropZones();
 }
@@ -1490,6 +1505,8 @@ function fgSelectLedger() {
   fgState.ledger = ledger || null;
   fgState.dims = {};
   fgState.order = { parameter: [], 'row-loop': [], 'column-loop': [] };
+  fgState.selected = new Set();
+  fgState.povParams = new Set();
   fgClearBoard();
 
   if (!ledger) return;
@@ -1555,8 +1572,26 @@ function fgRenderChips() {
   for (const zone of FG_ZONES) {
     const drop = document.querySelector(`.fg-zone-drop[data-zone="${zone}"]`);
     if (!drop) continue;
-    for (const dim of fgGetDimsInZone(zone)) {
-      drop.appendChild(fgCreateChip(dim, fgState.dims[dim]));
+    const dims = fgGetDimsInZone(zone);
+    // パラメータゾーン: POV複製分も追加（order順に挿入）
+    if (zone === 'parameter') {
+      const paramOrder = fgState.order.parameter || [];
+      const merged = [];
+      for (const d of paramOrder) {
+        if (dims.includes(d) || fgState.povParams.has(d)) merged.push(d);
+      }
+      // orderに無い通常パラメータも末尾に追加
+      for (const d of dims) { if (!merged.includes(d)) merged.push(d); }
+      for (const dim of merged) {
+        const isPov = fgState.povParams.has(dim) && fgState.dims[dim].zone !== 'parameter';
+        drop.appendChild(fgCreateChip(dim, isPov
+          ? { zone: 'parameter', fixedValue: '', paramList: fgState.dims[dim].paramList || '#ALL', _povCopy: true }
+          : fgState.dims[dim]));
+      }
+    } else {
+      for (const dim of dims) {
+        drop.appendChild(fgCreateChip(dim, fgState.dims[dim]));
+      }
     }
   }
 }
@@ -1571,6 +1606,17 @@ function fgCreateChip(dim, info) {
   label.className = 'fg-chip-label';
   label.textContent = dim;
   chip.appendChild(label);
+
+  // POV連動バッジ
+  const isPovLinked = fgState.povParams.has(dim);
+  if (isPovLinked) {
+    const badge = document.createElement('span');
+    badge.className = 'fg-pov-badge';
+    badge.textContent = 'POV';
+    badge.title = info._povCopy ? 'パラメータで起点メンバーを選択' : 'パラメータ選択を起点にループ展開';
+    chip.appendChild(badge);
+    chip.classList.add('fg-chip-pov');
+  }
 
   if (info.zone === 'fixed') {
     const input = document.createElement('input');
@@ -1604,12 +1650,44 @@ function fgCreateChip(dim, info) {
     }
   }
 
+  // クリックで選択（Ctrl+クリック: トグル追加、通常クリック: 単一選択）
+  let dragMoved = false;
+  chip.addEventListener('mousedown', () => { dragMoved = false; });
+  chip.addEventListener('mousemove', () => { dragMoved = true; });
+  chip.addEventListener('click', e => {
+    if (dragMoved) return; // ドラッグ操作は無視
+    if (e.target.closest('.fg-chip-input')) return; // input欄のクリックは無視
+    if (e.ctrlKey) {
+      if (fgState.selected.has(dim)) fgState.selected.delete(dim);
+      else fgState.selected.add(dim);
+    } else {
+      fgState.selected = new Set([dim]);
+    }
+    fgUpdateSelectionUI();
+  });
+
   chip.addEventListener('dragstart', e => {
+    // ドラッグ対象が選択に含まれていなければ、単一選択に切り替え
+    if (!fgState.selected.has(dim)) {
+      fgState.selected = new Set([dim]);
+      fgUpdateSelectionUI();
+    }
     e.dataTransfer.setData('text/plain', dim);
+    e.dataTransfer.setData('application/x-fg-dims', JSON.stringify([...fgState.selected]));
+    // POV複製チップのドラッグ元ゾーンを記録（パラメータ側の複製チップか判別用）
+    const sourceZone = chip.closest('.fg-zone-drop')?.dataset.zone || info.zone;
+    e.dataTransfer.setData('application/x-fg-source-zone', sourceZone);
     chip.classList.add('dragging');
+    // 選択中の他のチップも視覚的にドラッグ中にする
+    for (const d of fgState.selected) {
+      if (d !== dim) {
+        const el = document.querySelector(`.fg-chip[data-dim="${CSS.escape(d)}"]`);
+        if (el) el.classList.add('dragging');
+      }
+    }
   });
   chip.addEventListener('dragend', () => {
-    chip.classList.remove('dragging');
+    document.querySelectorAll('.fg-chip.dragging').forEach(c => c.classList.remove('dragging'));
   });
 
   return chip;
@@ -1623,6 +1701,10 @@ function fgSetupDropZones() {
     drop.addEventListener('dragover', e => {
       e.preventDefault();
       drop.classList.add('drag-over');
+      // Ctrl+ドラッグ → POVコピー操作を視覚表示
+      const isCopyTarget = e.ctrlKey && (zone === 'parameter' || zone === 'row-loop' || zone === 'column-loop');
+      e.dataTransfer.dropEffect = isCopyTarget ? 'copy' : 'move';
+      drop.classList.toggle('drag-over-copy', isCopyTarget);
 
       // 順序付きゾーン: ドロップ位置のインジケーターを表示
       if (FG_ORDERED_ZONES.includes(zone)) {
@@ -1632,48 +1714,104 @@ function fgSetupDropZones() {
     drop.addEventListener('dragleave', e => {
       // 子要素への移動でleaveが発火するのを防ぐ
       if (!drop.contains(e.relatedTarget)) {
-        drop.classList.remove('drag-over');
+        drop.classList.remove('drag-over', 'drag-over-copy');
         fgClearInsertIndicator(drop);
       }
     });
     drop.addEventListener('drop', e => {
       e.preventDefault();
-      drop.classList.remove('drag-over');
+      drop.classList.remove('drag-over', 'drag-over-copy');
       fgClearInsertIndicator(drop);
-      const dim = e.dataTransfer.getData('text/plain');
-      if (!dim || !fgState.dims[dim]) return;
 
-      const oldZone = fgState.dims[dim].zone;
+      // 複数選択ドラッグ対応: dims配列を取得（フォールバック: 単一dim）
+      let dims;
+      try { dims = JSON.parse(e.dataTransfer.getData('application/x-fg-dims')); } catch { dims = null; }
+      if (!dims || !dims.length) {
+        const single = e.dataTransfer.getData('text/plain');
+        if (!single || !fgState.dims[single]) return;
+        dims = [single];
+      }
+      dims = dims.filter(d => fgState.dims[d]);
+      if (!dims.length) return;
 
-      // 旧ゾーンの order から削除
-      if (FG_ORDERED_ZONES.includes(oldZone)) {
-        const arr = fgState.order[oldZone];
-        const idx = arr.indexOf(dim);
-        if (idx >= 0) arr.splice(idx, 1);
+      const sourceZone = e.dataTransfer.getData('application/x-fg-source-zone') || fgState.dims[dims[0]].zone;
+      const isCtrl = e.ctrlKey;
+      const isTargetAxis = zone === 'row-loop' || zone === 'column-loop';
+      const draggedFromParam = sourceZone === 'parameter';
+
+      // 挿入位置を一度だけ計算（複数チップは連続挿入）
+      let baseInsertIdx = FG_ORDERED_ZONES.includes(zone)
+        ? fgCalcInsertIndex(drop, e.clientX, dims[0])
+        : 0;
+
+      for (let i = 0; i < dims.length; i++) {
+        const dim = dims[i];
+        const oldZone = fgState.dims[dim].zone;
+        const isAxisZone = oldZone === 'row-loop' || oldZone === 'column-loop';
+
+        // Ctrl+ドラッグ: 軸 ↔ パラメータ間の複製（POV起点パターン）
+        if (isCtrl && !fgState.povParams.has(dim)) {
+          if (isAxisZone && zone === 'parameter') {
+            fgState.povParams.add(dim);
+            fgState.order.parameter.splice(baseInsertIdx + i, 0, dim);
+            continue;
+          }
+          if (oldZone === 'parameter' && isTargetAxis) {
+            fgState.povParams.add(dim);
+            fgState.dims[dim].zone = zone;
+            fgState.order[zone].splice(baseInsertIdx + i, 0, dim);
+            continue;
+          }
+        }
+
+        // POV複製チップの処理
+        if (fgState.povParams.has(dim)) {
+          if (draggedFromParam) {
+            if (zone === 'parameter') {
+              const pIdx = fgState.order.parameter.indexOf(dim);
+              if (pIdx >= 0) fgState.order.parameter.splice(pIdx, 1);
+              fgState.order.parameter.splice(baseInsertIdx + i, 0, dim);
+              continue;
+            }
+            fgState.povParams.delete(dim);
+            const pIdx = fgState.order.parameter.indexOf(dim);
+            if (pIdx >= 0) fgState.order.parameter.splice(pIdx, 1);
+          } else {
+            fgState.povParams.delete(dim);
+            const pIdx = fgState.order.parameter.indexOf(dim);
+            if (pIdx >= 0) fgState.order.parameter.splice(pIdx, 1);
+          }
+        }
+
+        // 旧ゾーンの order から削除
+        if (FG_ORDERED_ZONES.includes(oldZone)) {
+          const arr = fgState.order[oldZone];
+          const idx = arr.indexOf(dim);
+          if (idx >= 0) arr.splice(idx, 1);
+        }
+
+        // ゾーン変更
+        fgState.dims[dim].zone = zone;
+
+        // 固定値の自動設定
+        if (zone === 'fixed') {
+          if (dim === '#VIEW' && !fgState.dims[dim].fixedValue) fgState.dims[dim].fixedValue = 'PER';
+          if (dim === '#CHANGE' && !fgState.dims[dim].fixedValue) fgState.dims[dim].fixedValue = '#NONE';
+        } else if (zone === 'fixed-total') {
+          fgState.dims[dim].fixedValue = 'TOTAL';
+        } else if (zone === 'fixed-none') {
+          fgState.dims[dim].fixedValue = 'NONE';
+        } else {
+          if (dim !== '#VIEW' && dim !== '#CHANGE') fgState.dims[dim].fixedValue = '';
+        }
+
+        // 新ゾーンの order に挿入
+        if (FG_ORDERED_ZONES.includes(zone)) {
+          fgState.order[zone].splice(baseInsertIdx + i, 0, dim);
+        }
       }
 
-      // ゾーン変更
-      fgState.dims[dim].zone = zone;
-
-      // 固定値の自動設定
-      if (zone === 'fixed') {
-        if (dim === '#VIEW' && !fgState.dims[dim].fixedValue) fgState.dims[dim].fixedValue = 'PER';
-        if (dim === '#CHANGE' && !fgState.dims[dim].fixedValue) fgState.dims[dim].fixedValue = '#NONE';
-      } else if (zone === 'fixed-total') {
-        fgState.dims[dim].fixedValue = 'TOTAL';
-      } else if (zone === 'fixed-none') {
-        fgState.dims[dim].fixedValue = 'NONE';
-      } else {
-        // 他ゾーンに移動した場合は固定値をクリア（#VIEW/#CHANGEは除く）
-        if (dim !== '#VIEW' && dim !== '#CHANGE') fgState.dims[dim].fixedValue = '';
-      }
-
-      // 新ゾーンの order に挿入
-      if (FG_ORDERED_ZONES.includes(zone)) {
-        const insertIdx = fgCalcInsertIndex(drop, e.clientX, dim);
-        fgState.order[zone].splice(insertIdx, 0, dim);
-      }
-
+      fgState.selected.clear();
       fgRenderChips();
     });
   }
@@ -1681,7 +1819,8 @@ function fgSetupDropZones() {
 
 // ── ゾーン内の挿入位置を計算 ──
 function fgCalcInsertIndex(dropEl, clientX, dragDim) {
-  const chips = [...dropEl.querySelectorAll('.fg-chip')].filter(c => c.dataset.dim !== dragDim);
+  const dragDims = fgState.selected.size > 0 ? fgState.selected : new Set([dragDim]);
+  const chips = [...dropEl.querySelectorAll('.fg-chip')].filter(c => !dragDims.has(c.dataset.dim));
   for (let i = 0; i < chips.length; i++) {
     const rect = chips[i].getBoundingClientRect();
     if (clientX < rect.left + rect.width / 2) return i;
@@ -1708,6 +1847,21 @@ function fgClearInsertIndicator(dropEl) {
     chip.classList.remove('insert-before', 'insert-after');
   }
 }
+
+// ── 選択UI更新 ──
+function fgUpdateSelectionUI() {
+  document.querySelectorAll('.fg-chip').forEach(chip => {
+    chip.classList.toggle('fg-chip-selected', fgState.selected.has(chip.dataset.dim));
+  });
+}
+
+// ボード上の空白クリックで選択解除
+document.addEventListener('click', e => {
+  if (!e.target.closest('.fg-chip') && e.target.closest('.fg-board')) {
+    fgState.selected.clear();
+    fgUpdateSelectionUI();
+  }
+});
 
 // ── XML 生成 ──
 function fgGenerate() {
@@ -1736,8 +1890,18 @@ function fgGenerate() {
   // name
   const nameStr = nameJa ? `ja;"${nameJa}"` : '';
 
-  // 順序付きで取得
-  const params  = fgGetDimsInZone('parameter').map(d => [d, assigns[d]]);
+  // 順序付きで取得（POV複製分もパラメータに含める）
+  const paramDims = fgGetDimsInZone('parameter');
+  const paramOrder = fgState.order.parameter || [];
+  for (const d of paramOrder) {
+    if (fgState.povParams.has(d) && !paramDims.includes(d)) paramDims.push(d);
+  }
+  // order順に並べ直す
+  paramDims.sort((a, b) => {
+    const ai = paramOrder.indexOf(a), bi = paramOrder.indexOf(b);
+    return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+  });
+  const params  = paramDims.map(d => [d, assigns[d]]);
   const rowLoops = fgGetDimsInZone('row-loop').map(d => [d, assigns[d]]);
   const colLoops = fgGetDimsInZone('column-loop').map(d => [d, assigns[d]]);
 
@@ -1772,7 +1936,9 @@ function fgGenerate() {
       xml += `        <member-list-expression>\n`;
       xml += `          <peg-member type="ALL"/>\n`;
       xml += `          <expansion-method include-peg="true" method="NONE_EXPANSION" parent-first="true"/>\n`;
-      xml += `          <member-criteria>#LEAF="TRUE"</member-criteria>\n`;
+      if (!fgState.povParams.has(dim)) {
+        xml += `          <member-criteria>#LEAF="TRUE"</member-criteria>\n`;
+      }
       xml += `        </member-list-expression>\n`;
       xml += `      </member-list-spec>\n`;
       xml += `    </parameter-spec>\n`;
@@ -1835,10 +2001,17 @@ function fgBuildNestedLoops(loops, depth, baseIndent, nextId, axis) {
   xml += `${pad}    <member-list-spec>\n`;
   xml += `${pad}        <dimension-label>${escXml(dim)}</dimension-label>\n`;
   xml += `${pad}        <type>EXPR</type>\n`;
+  const isPov = fgState.povParams.has(dim);
   xml += `${pad}        <member-list-expression>\n`;
-  xml += `${pad}            <peg-member type="ALL"/>\n`;
-  xml += `${pad}            <expansion-method include-peg="true" method="NONE_EXPANSION" parent-first="true"/>\n`;
-  xml += `${pad}            <member-criteria>#LEAF="TRUE"</member-criteria>\n`;
+  if (isPov) {
+    xml += `${pad}            <peg-member type="POV"/>\n`;
+    xml += `${pad}            <expansion-method include-peg="true" method="DESCENDENT" parent-first="true"/>\n`;
+    xml += `${pad}            <member-criteria/>\n`;
+  } else {
+    xml += `${pad}            <peg-member type="ALL"/>\n`;
+    xml += `${pad}            <expansion-method include-peg="true" method="NONE_EXPANSION" parent-first="true"/>\n`;
+    xml += `${pad}            <member-criteria>#LEAF="TRUE"</member-criteria>\n`;
+  }
   xml += `${pad}        </member-list-expression>\n`;
   xml += `${pad}        <member-list-label>#ALL</member-list-label>\n`;
   xml += `${pad}    </member-list-spec>\n`;

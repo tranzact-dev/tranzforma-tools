@@ -117,6 +117,16 @@ body { height: 100vh; overflow: hidden; }
 .unlinked-heading {
   font: 600 13px var(--mono); color: var(--warn);
   padding: 6px 12px; letter-spacing: 0.03em;
+  cursor: pointer; user-select: none;
+}
+.unlinked-heading::before {
+  content: '▼ '; font-size: 11px;
+}
+.unlinked-heading.collapsed::before {
+  content: '▶ ';
+}
+.unlinked-heading.collapsed + .unlinked-list {
+  display: none;
 }
 .unlinked-list {
   border-left: 3px solid var(--warn);

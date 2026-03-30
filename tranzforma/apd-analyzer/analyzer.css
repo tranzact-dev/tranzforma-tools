@@ -220,6 +220,10 @@ td.params { color: var(--info); font-size: 11px; }
 .fg-zone-drop.drag-over {
   border-color: var(--accent); background: var(--accent-dim);
 }
+.fg-zone-drop.drag-over-copy {
+  border-color: var(--info); background: var(--info-dim);
+  border-style: solid;
+}
 .fg-fixed-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 .fg-fixed-sub {
   border: 1px solid var(--border); border-radius: 6px;
@@ -241,6 +245,7 @@ td.params { color: var(--info); font-size: 11px; }
   cursor: grab; user-select: none; transition: box-shadow 0.15s;
 }
 .fg-chip:hover { box-shadow: 0 1px 4px rgba(0,0,0,0.25); }
+.fg-chip.fg-chip-selected { border-color: var(--accent); background: var(--accent-dim); }
 .fg-chip.dragging { opacity: 0.4; }
 .fg-chip.insert-before { box-shadow: -3px 0 0 0 var(--accent); }
 .fg-chip.insert-after  { box-shadow:  3px 0 0 0 var(--accent); }
@@ -257,6 +262,14 @@ td.params { color: var(--info); font-size: 11px; }
   width: 70px;
 }
 .fg-chip-input:focus { border-color: var(--accent); outline: none; }
+.fg-chip-pov { border-color: var(--info); }
+.fg-pov-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 1px 4px; border-radius: 3px;
+  background: var(--info); color: #fff;
+  font: 700 8px var(--mono); letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
 
 /* ─── Actions & Preview ─── */
 .fg-actions { display: flex; gap: 8px; align-items: center; }

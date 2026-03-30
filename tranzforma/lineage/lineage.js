@@ -392,11 +392,23 @@ function renderTree() {
       section.className = 'unlinked-section';
       const heading = document.createElement('div');
       heading.className = 'unlinked-heading';
-      heading.textContent = 'ツリー外 (' + countNodes(unlinked) + ')';
+      const unlinkedCount = countNodes(unlinked);
+      heading.textContent = 'ツリー外 (' + unlinkedCount + ')';
+      const hasUnlinkedHit = searchHitIds.some(id => findNode(id, unlinked));
+      const startCollapsed = unlinkedCount > 200 && !hasUnlinkedHit;
+      if (startCollapsed) heading.classList.add('collapsed');
       section.appendChild(heading);
       const list = document.createElement('div');
       list.className = 'unlinked-list';
-      for (const node of unlinked) list.appendChild(renderNode(node, 0));
+      let unlinkedRendered = !startCollapsed;
+      if (unlinkedRendered) for (const node of unlinked) list.appendChild(renderNode(node, 0));
+      heading.addEventListener('click', () => {
+        const isCollapsed = heading.classList.toggle('collapsed');
+        if (!isCollapsed && !unlinkedRendered) {
+          unlinkedRendered = true;
+          for (const node of unlinked) list.appendChild(renderNode(node, 0));
+        }
+      });
       section.appendChild(list);
       $treeContainer.appendChild(section);
     }
