@@ -195,6 +195,13 @@ function executeClone() {
     const clonedBlock = target.cloneNode(true);
     remapIds(clonedBlock, idMapping);
 
+    // ラベルにインクリメント番号を付与（_1, _2, ...）
+    const suffix = `_${c + 1}`;
+    for (const el of [clonedBlock, ...clonedBlock.querySelectorAll('[label]')]) {
+      const lbl = el.getAttribute('label');
+      if (lbl) el.setAttribute('label', lbl + suffix);
+    }
+
     // Insert cloned block immediately after the previous inserted block
     blockInsertRef.parentNode.insertBefore(clonedBlock, blockInsertRef.nextSibling);
     blockInsertRef = clonedBlock;
