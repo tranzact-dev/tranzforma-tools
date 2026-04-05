@@ -1,7 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="#e4a842" stroke-linecap="round" stroke-linejoin="round">
-  <rect x="18" y="6" width="24" height="30" rx="3" stroke-width="2.5" opacity="0.5"/>
-  <rect x="6" y="14" width="24" height="30" rx="3" fill="#0c0e14" stroke-width="2.5"/>
-  <line x1="12" y1="24" x2="24" y2="24" stroke-width="2.2" opacity="0.8"/>
-  <line x1="12" y1="31" x2="24" y2="31" stroke-width="2.2" opacity="0.8"/>
-  <line x1="12" y1="38" x2="20" y2="38" stroke-width="2.2" opacity="0.8"/>
+  <!-- left cell -->
+  <ellipse cx="16" cy="24" rx="12" ry="14" stroke-width="2.5" fill="rgba(228,168,66,0.08)"/>
+  <!-- right cell -->
+  <ellipse cx="32" cy="24" rx="12" ry="14" stroke-width="2.5" fill="rgba(228,168,66,0.08)"/>
+  <!-- pinch point (division) -->
+  <path d="M24 10C21 16 21 32 24 38" stroke-width="2" opacity="0.5" fill="none"/>
+  <!-- left nucleus -->
+  <circle cx="14" cy="24" r="3.5" stroke-width="2" fill="rgba(228,168,66,0.2)"/>
+  <!-- right nucleus -->
+  <circle cx="34" cy="24" r="3.5" stroke-width="2" fill="rgba(228,168,66,0.2)"/>
 </svg>

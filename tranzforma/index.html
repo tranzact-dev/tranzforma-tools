@@ -52,7 +52,7 @@ body { justify-content: flex-start; }
 .card-body { flex: 1; display: flex; flex-direction: column; gap: 6px; }
 .card-category { font: 600 10px var(--mono); color: var(--text3); letter-spacing: 0.1em; text-transform: uppercase; }
 .card-name { font: 700 17px var(--sans); color: var(--text); }
-.card-desc { font: 400 13px var(--sans); color: var(--text2); line-height: 1.65; margin-top: 2px; }
+.card-desc { font: 400 14px var(--sans); color: var(--text2); line-height: 1.65; margin-top: 2px; }
 
 .card-foot {
   display: flex; align-items: center; gap: 8px;
@@ -62,6 +62,46 @@ body { justify-content: flex-start; }
 .card-arrow { margin-left: auto; font-size: 18px; color: var(--text3); transition: transform 0.15s; }
 .tool-card:hover .card-arrow { transform: translateX(3px); color: var(--accent); }
 .card-ver { font: 500 12px var(--mono); color: var(--text3); }
+
+/* ─── Codename Variants ─── */
+/* Pattern A: 右上にロゴ＋バージョン */
+.codename-block {
+  position: absolute; top: 14px; right: 18px; z-index: 1;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+  opacity: 0.5; transition: opacity 0.18s;
+}
+.codename-block .codename-name {
+  font: 600 17px var(--sans); letter-spacing: 0.04em; color: var(--text3);
+}
+.codename-block .codename-ver {
+  font: 500 10px var(--mono); color: var(--text3);
+}
+.tool-card:hover .codename-block { opacity: 0.8; }
+
+/* Pattern B: 背景ウォーターマーク */
+.codename-initial {
+  position: absolute; top: 14px; right: 18px; z-index: 0;
+  font: 900 20px var(--sans);
+  color: var(--text3); opacity: 0.25;
+  line-height: 1; pointer-events: none;
+  transition: opacity 0.18s;
+}
+.codename-initial.codename-lg {
+  font-size: 25px;
+}
+.tool-card:hover .codename-initial { opacity: 0.12; }
+
+/* Pattern D: バッジ（汎用） */
+.codename-badge {
+  font: 600 10px var(--mono); padding: 2px 8px; border-radius: 3px;
+  background: rgba(150,120,255,0.12); color: #9678ff;
+  letter-spacing: 0.03em;
+}
+/* Lineage用バッジ（右上ロゴ内） */
+.codename-badge-dim {
+  background: rgba(100,181,246,0.15); color: #64b5f6;
+  font-size: 12px; padding: 2px 6px; vertical-align: middle;
+}
 
 /* ─── Status Badge ─── */
 .status { font: 600 10px var(--mono); padding: 2px 8px; border-radius: 3px; letter-spacing: 0.03em; }
@@ -214,98 +254,91 @@ body { justify-content: flex-start; }
   <div class="tool-grid">
 
     <a class="tool-card" href="xml-review/">
+      <div class="codename-block">
+        <span class="codename-name">Uniforma</span>
+        <span class="codename-ver">v2.0</span>
+      </div>
       <div class="card-icon icon-blue">
         <img src="shared/icons/xml-review.svg" alt="">
       </div>
       <div class="card-body">
-        <span class="card-category">Forms</span>
+
         <span class="card-name">XML review tool</span>
-        <span class="card-desc">フォーム定義XMLのチェックツール。命名規約・設定ミスを自動検出。COM / REF / IMP / EXP / PIP パターン対応。</span>
-      </div>
-      <div class="card-foot">
-        <span class="status status-stable">stable</span>
-        <span class="card-ver">v2.0</span>
-        <span class="card-arrow">›</span>
+        <span class="card-desc">フォーム定義XMLのチェックツール。命名規約・設定ミスを自動検出。自動補正、レビューテキスト出力。</span>
       </div>
     </a>
 
     <a class="tool-card" href="xml-format/">
+      <div class="codename-block">
+        <span class="codename-ver">v1.0</span>
+      </div>
       <div class="card-icon icon-teal">
         <img src="shared/icons/xml-format.svg" alt="">
       </div>
       <div class="card-body">
-        <span class="card-category">Forms</span>
+
         <span class="card-name">XML format tool</span>
-        <span class="card-desc">フォーム定義XMLの表示設定をGUIで変更するツール。suppress / item-addition / タイトルを個別・一括で編集。</span>
-      </div>
-      <div class="card-foot">
-        <span class="status status-stable">stable</span>
-        <span class="card-ver">v1.0</span>
-        <span class="card-arrow">›</span>
+        <span class="card-desc">フォームの表示設定変更ツール。データ無し非表示、項目選択行非表示、行列タイトル自動補完など。</span>
       </div>
     </a>
 
     <a class="tool-card" href="xml-clone/">
+      <div class="codename-block">
+        <span class="codename-name">Mitosis</span>
+        <span class="codename-ver">v1.0</span>
+      </div>
       <div class="card-icon icon-amber">
         <img src="shared/icons/xml-clone.svg" alt="">
       </div>
       <div class="card-body">
-        <span class="card-category">Forms</span>
+
         <span class="card-name">XML clone tool</span>
-        <span class="card-desc">列・行仕様・ループブロックの複製ツール。id の重複を自動回避しながら関連 cell-spec も含めて複製。</span>
-      </div>
-      <div class="card-foot">
-        <span class="status status-beta">beta</span>
-        <span class="card-ver">v1.0</span>
-        <span class="card-arrow">›</span>
+        <span class="card-desc">列・行仕様・ループブロックの複製ツール。id の重複を自動回避しながら関連セル仕様も含めて複製。</span>
       </div>
     </a>
 
     <a class="tool-card" href="apd-analyzer/">
+      <div class="codename-block">
+        <span class="codename-name">Pandora</span>
+        <span class="codename-ver">v1.1</span>
+      </div>
       <div class="card-icon icon-info">
         <img src="shared/icons/apd-analyzer.svg" alt="">
       </div>
       <div class="card-body">
-        <span class="card-category">APD Analyzer</span>
+
         <span class="card-name">APD analyzer</span>
-        <span class="card-desc">APDからフォーム一覧を抽出・TSV出力。2つのAPDの差分比較とフォームのZIPダウンロード（移行）に対応。</span>
-      </div>
-      <div class="card-foot">
-        <span class="status status-stable">stable</span>
-        <span class="card-ver">v1.1</span>
-        <span class="card-arrow">›</span>
+        <span class="card-desc">アプリ定義ファイル（.apd）の解析ツール。フォーム一覧から移行資材自動抽出まで対応する総合プラットフォーム。</span>
       </div>
     </a>
 
     <a class="tool-card" href="requester-generator/">
+      <div class="codename-block">
+        <span class="codename-name">Sherpa</span>
+        <span class="codename-ver">v0.1</span>
+      </div>
       <div class="card-icon icon-purple">
         <img src="shared/icons/requester-wizard.svg" alt="">
       </div>
       <div class="card-body">
-        <span class="card-category">Requester</span>
+
         <span class="card-name">Requester wizard</span>
-        <span class="card-desc">リクエスタの作成ウィザード。接続・リクエストタイプ・ループ構造を選択して run.bat と request.xml を ZIP 出力。</span>
-      </div>
-      <div class="card-foot">
-        <span class="status status-dev">dev</span>
-        <span class="card-ver">v0.1</span>
-        <span class="card-arrow">›</span>
+        <span class="card-desc">リクエスタの設定ウィザード。アプリ上で設定していくだけでループ付きバッチ処理まで導いてくれる案内人。</span>
       </div>
     </a>
 
     <a class="tool-card" href="lineage/">
+      <div class="codename-block">
+        <span class="codename-name">Lineage</span>
+        <span class="codename-ver">v0.1</span>
+      </div>
       <div class="card-icon icon-info">
         <img src="shared/icons/lineage.svg" alt="">
       </div>
       <div class="card-body">
-        <span class="card-category">Dimension</span>
-        <span class="card-name">Lineage</span>
-        <span class="card-desc">ディメンション階層の編集ツール。マネージャーからコピーしたデータをツリー表示し、ドラッグ＆ドロップで親子関係を変更。</span>
-      </div>
-      <div class="card-foot">
-        <span class="status status-dev">dev</span>
-        <span class="card-ver">v0.1</span>
-        <span class="card-arrow">›</span>
+
+        <span class="card-name">Dimension hierarchy editor</span>
+        <span class="card-desc">ディメンション階層の編集ツール。FPのUIにはないドラッグ＆ドロップによる直感的操作や検索結果の巡回機能を実現。</span>
       </div>
     </a>
 

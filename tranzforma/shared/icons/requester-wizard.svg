@@ -1,8 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" stroke="#9678ff" stroke-linecap="round" stroke-linejoin="round">
-  <line x1="10" y1="38" x2="30" y2="18" stroke-width="3"/>
-  <rect x="27" y="8" width="11" height="11" rx="2" fill="#9678ff" transform="rotate(45 32.5 13.5)"/>
-  <circle cx="12" cy="16" r="2.5" fill="#9678ff" opacity="0.7"/>
-  <circle cx="38" cy="34" r="2"   fill="#9678ff" opacity="0.55"/>
-  <circle cx="40" cy="16" r="1.8" fill="#9678ff" opacity="0.65"/>
-  <circle cx="22" cy="8"  r="1.5" fill="#9678ff" opacity="0.5"/>
+  <!-- mountain -->
+  <path d="M4 40L18 12L32 40" stroke-width="2.5" fill="rgba(150,120,255,0.08)"/>
+  <!-- second peak -->
+  <path d="M22 40L34 18L44 40" stroke-width="2.5" fill="rgba(150,120,255,0.06)"/>
+  <!-- snow cap -->
+  <path d="M14 20L18 12L22 20" stroke-width="0" fill="rgba(150,120,255,0.2)"/>
+  <!-- flag at summit -->
+  <line x1="18" y1="12" x2="18" y2="5" stroke-width="2"/>
+  <path d="M18 5L25 7.5L18 10" stroke-width="1.5" fill="rgba(150,120,255,0.35)"/>
+  <!-- trail (dotted path up the mountain) -->
+  <path d="M8 36L14 26L20 30L26 20L32 24" stroke-width="1.5" opacity="0.4" stroke-dasharray="2 3"/>
 </svg>
