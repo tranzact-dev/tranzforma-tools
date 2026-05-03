@@ -529,6 +529,7 @@ function renderFormRows(forms) {
       <td>${esc(f.updateType)}</td>
       <td>${esc(f.resolvedAt)}</td>
       <td class="params">${esc(f.parameters)}</td>
+      <td class="params">${esc(f.drillDowns)}</td>
       <td class="params">${esc(f.triggers)}</td>
     </tr>`).join('');
 }
@@ -565,11 +566,12 @@ function copyListTSV() {
   const apd = activeResult?.side === 'A' ? apdA : apdB;
   if (!apd) return;
   const forms  = getFilteredForms(apd);
-  const header = 'FORM_LIST_LABEL\tFORM_LIST_NAME\tFORM_LABEL\tFORM_NAME_JA\tFORM_NAME_EN\tREFLECT_CALC\tIMPORT\tEXPORT\tRELATED_LEDGERS\tUPDATE_LEDGER\tUPDATE_TYPE\tRESOLVED_AT\tPARAMETERS\tTRIGGERS';
+  const header = 'FORM_LIST_LABEL\tFORM_LIST_NAME\tFORM_LABEL\tFORM_NAME_JA\tFORM_NAME_EN\tREFLECT_CALC\tIMPORT\tEXPORT\tRELATED_LEDGERS\tUPDATE_LEDGER\tUPDATE_TYPE\tRESOLVED_AT\tPARAMETERS\tDRILLDOWN_TO\tTRIGGERS';
+  const tsvSafe = v => v && v.includes(',') ? `"${v}"` : (v || '');
   const rows   = forms.map(f =>
-    [f.flLabel, f.flName, f.formLabel, f.formNameJa, f.formNameEn,
-     f.reflectCalc, f.import, f.export, f.relatedLedgers, f.updateLedger, f.updateType, f.resolvedAt,
-     f.parameters, f.triggers].join('\t')
+    [f.flLabel, f.flName, f.formLabel, tsvSafe(f.formNameJa), tsvSafe(f.formNameEn),
+     f.reflectCalc, f.import, f.export, tsvSafe(f.relatedLedgers), f.updateLedger, f.updateType, f.resolvedAt,
+     tsvSafe(f.parameters), tsvSafe(f.drillDowns), tsvSafe(f.triggers)].join('\t')
   );
   const suffix = document.getElementById('includeBK').checked ? '' : '（BK除外）';
   copyText([header, ...rows].join('\r\n'), 'TSVをコピーしました' + suffix);
@@ -683,6 +685,17 @@ async function downloadTransZip(fmt) {
 // ═══════════════════════════════════════════════════════════════════
 // スクリプト
 // ═══════════════════════════════════════════════════════════════════
+function buildScriptToFormsMap(apd) {
+  const formLabels = apd.forms.map(f => f.formLabel).filter(Boolean);
+  const map = new Map();
+  for (const s of apd.scripts) {
+    if (!s.scriptText) continue;
+    const related = formLabels.filter(l => s.scriptText.includes(l));
+    if (related.length) map.set(s.label, related);
+  }
+  return map;
+}
+
 function renderScriptResult(side) {
   const apd = side === 'A' ? apdA : apdB;
   if (!apd) return;
@@ -692,21 +705,28 @@ function renderScriptResult(side) {
   document.getElementById('scriptSummary').textContent =
     `[APD-${side}] ${apd.fileName} — ${apd.scripts.length}件`;
 
-  document.getElementById('scriptTbody').innerHTML = apd.scripts.map(s => `
+  const s2f = buildScriptToFormsMap(apd);
+  document.getElementById('scriptTbody').innerHTML = apd.scripts.map(s => {
+    const related = s2f.get(s.label)?.join(',') || '';
+    return `
     <tr>
       <td class="label-cell">${esc(s.label)}</td>
       <td>${esc(s.nameJa)}</td>
       <td>${esc(s.nameEn)}</td>
       <td class="${s.hasErrors === 'true' ? 'on' : ''}" style="${s.hasErrors === 'true' ? 'color:var(--error)' : ''}">${s.hasErrors === 'true' ? 'あり' : ''}</td>
-    </tr>`).join('');
+      <td class="params">${esc(related)}</td>
+    </tr>`;
+  }).join('');
 }
 
 function copyScriptTSV() {
   const apd = activeResult?.side === 'A' ? apdA : apdB;
   if (!apd) return;
-  const header = 'LABEL\tNAME_JA\tNAME_EN\tHAS_ERRORS';
+  const header = 'LABEL\tNAME_JA\tNAME_EN\tHAS_ERRORS\tRELATED_FORMS';
+  const tsvSafe = v => v && v.includes(',') ? `"${v}"` : (v || '');
+  const s2f = buildScriptToFormsMap(apd);
   const rows   = apd.scripts.map(s =>
-    [s.label, s.nameJa, s.nameEn, s.hasErrors].join('\t')
+    [s.label, tsvSafe(s.nameJa), tsvSafe(s.nameEn), s.hasErrors, tsvSafe(s2f.get(s.label)?.join(',') || '')].join('\t')
   );
   copyText([header, ...rows].join('\r\n'), 'スクリプト一覧TSVをコピーしました');
 }

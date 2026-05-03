@@ -87,8 +87,8 @@ function showApdError(msg) {
 function populateFromApd() {
   if (!apdData) return;
 
-  // FORM select
-  fillSelect('p-form', apdData.forms);
+  // FORM select (show label + name)
+  fillFormSelect('p-form', apdData.forms);
   onFormChange(); // load POV dims for the initially selected form
 
   // DIMENSION select
@@ -113,6 +113,18 @@ function populateFromApd() {
       ? 'ENTERPRISE アプリ: 業務責任単位名を入力してください'
       : 'WORKGROUP アプリ: #NONE を入力してください';
   }
+}
+
+function fillFormSelect(id, items) {
+  const sel = document.getElementById(id);
+  if (!sel) return;
+  sel.innerHTML = '';
+  items.forEach(f => {
+    const opt = document.createElement('option');
+    opt.value = f.label;
+    opt.textContent = f.name ? `${f.label}  —  ${f.name}` : f.label;
+    sel.appendChild(opt);
+  });
 }
 
 function fillSelect(id, items) {

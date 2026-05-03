@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tranzForma XML import spec generator</title>
+<link rel="stylesheet" href="../shared/common.css">
+<script src="../shared/theme.js"></script>
+<script src="../shared/auth.js"></script>
+<script src="../shared/auth-guard.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<style>
+body { height: 100vh; overflow: hidden; }
+
+/* ─── App shell ─── */
+.app { flex: 1; display: flex; min-height: 0; }
+
+/* ─── Left pane: XML input + analysis ─── */
+.pane-xml {
+  width: 380px; min-width: 300px; display: flex; flex-direction: column;
+  border-right: 1px solid var(--border); flex-shrink: 0;
+}
+.pane-xml textarea { height: 120px; margin: 10px 14px; font-size: 12px; line-height: 1.7; flex-shrink: 0; }
+
+/* Analysis results */
+.xml-analysis {
+  flex: 1; overflow-y: auto; padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.analysis-section {
+  padding: 10px 12px; background: var(--surface2); border-radius: 6px; border: 1px solid var(--border);
+  font: 400 12px var(--mono); color: var(--text2); display: flex; flex-direction: column; gap: 4px;
+}
+.analysis-section .label {
+  font: 600 10px var(--mono); color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px;
+}
+.analysis-section .ok { color: var(--ok); }
+.analysis-section .err { color: var(--error); }
+.analysis-section .warn { color: var(--warn); }
+.analysis-section .dim { color: var(--text3); }
+
+/* ─── Right pane: Excel + result ─── */
+.pane-main {
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
+}
+
+/* Excel upload area (compact, with guidance) */
+.excel-section {
+  padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--surface);
+  display: flex; gap: 12px; align-items: stretch;
+}
+.excel-section .drop-zone { padding: 12px; flex: 0 0 45%; }
+.excel-section .drop-zone .icon { font-size: 18px; margin-bottom: 2px; }
+.excel-section .drop-zone div { font-size: 12px; }
+.excel-guide {
+  flex: 1; font: 400 11px var(--mono); color: var(--text3); line-height: 1.7;
+  display: flex; flex-direction: column; justify-content: center; gap: 2px;
+}
+.excel-guide .guide-title {
+  font: 600 10px var(--mono); color: var(--text3); text-transform: uppercase;
+  letter-spacing: 0.08em; margin-bottom: 2px;
+}
+.excel-guide .note { color: var(--warn); }
+.excel-guide .notice { color: var(--error); font-weight: 600; }
+
+/* Preview table */
+.preview-wrap {
+  flex: 1; overflow: auto; min-height: 0;
+}
+.preview-table {
+  width: 100%; border-collapse: collapse; font: 400 12px var(--mono);
+}
+.preview-table th {
+  position: sticky; top: 0; background: var(--surface); z-index: 1;
+  padding: 6px 12px; text-align: left; border-bottom: 2px solid var(--border);
+  font: 600 11px var(--mono); color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em;
+}
+.preview-table td {
+  padding: 5px 12px; border-bottom: 1px solid var(--border); color: var(--text2);
+}
+.preview-table tr:hover td { background: var(--surface2); }
+.preview-empty {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  color: var(--text3); font: 400 13px var(--mono); opacity: 0.5;
+}
+
+/* Result bar */
+.result-bar {
+  padding: 10px 14px; border-top: 1px solid var(--border); background: var(--surface);
+  display: flex; align-items: center; gap: 10px;
+}
+.result-bar .count {
+  font: 600 13px var(--mono); color: var(--ok);
+}
+.result-bar .copied {
+  font: 500 12px var(--mono); color: var(--ok); opacity: 0; transition: opacity 0.2s;
+}
+.result-bar .copied.show { opacity: 1; }
+
+/* ─── Responsive ─── */
+@media (max-width: 800px) {
+  .app { flex-direction: column; }
+  .pane-xml { width: 100%; max-height: 50vh; border-right: none; border-bottom: 1px solid var(--border); }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <img src="../shared/logo.png" alt="tranzForma">
+  <h1><a href="../index.html">tranzForma</a> XML import spec generator</h1>
+  <span style="font:500 12px var(--mono);color:var(--text3)">v0.1</span>
+  <button style="margin-left:auto" class="theme-btn" onclick="toggleTheme()"></button>
+</header>
+
+<div class="app">
+
+  <!-- Left: XML input + analysis -->
+  <div class="pane-xml">
+    <div class="pane-header">XML input</div>
+    <textarea id="xmlInput" placeholder="Paste form-definition XML here..."></textarea>
+    <div class="btn-row">
+      <button class="btn btn-primary" onclick="analyzeXml()">Analyze</button>
+      <button class="btn btn-secondary" id="btnExport" onclick="exportExcel()" style="display:none">Export Excel</button>
+      <button class="btn btn-secondary" onclick="clearAll()">Clear</button>
+    </div>
+    <div class="xml-analysis" id="xmlAnalysis">
+      <div class="analysis-section">
+        <span class="dim">Waiting for XML...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Excel + preview + result -->
+  <div class="pane-main">
+    <div class="excel-section">
+      <div class="drop-zone" id="dropZone">
+        <div class="icon">&#128196;</div>
+        <div>Drop Excel here</div>
+        <div style="font-size:11px;margin-top:4px;color:var(--text3)">.xlsx / <a href="#" onclick="downloadTemplate(event)" style="color:var(--accent)">template DL</a></div>
+        <input type="file" id="fileInput" accept=".xlsx,.xls">
+      </div>
+      <div class="excel-guide" id="excelGuide">
+        <span class="guide-title">Excel guide</span>
+        <span>- ラベル(B列)を <b style="color:var(--text)">YYYYMM</b> にすると、#FYと#PERIODの判別式を自動挿入します。C列に具体的なフォーマットを記述してください（YYYY/MM/DD、YYYYMMなど）</span>
+        <span>- is_value(D列)は、値チェックボックスを表します。<b style="color:var(--text)">TRUE</b> を入力してください。</span>
+      </div>
+    </div>
+
+    <div class="preview-wrap" id="previewWrap">
+      <div class="preview-empty" id="previewEmpty">Upload Excel to preview columns</div>
+      <table class="preview-table" id="previewTable" style="display:none">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>column_id</th>
+            <th>label</th>
+            <th>name</th>
+            <th>is_value</th>
+            <th>field_key</th>
+          </tr>
+        </thead>
+        <tbody id="previewBody"></tbody>
+      </table>
+    </div>
+
+    <div class="result-bar" id="resultBar" style="display:none">
+      <span class="count" id="resultCount"></span>
+      <button class="btn btn-fix" id="btnGenerate" onclick="generate()">Generate</button>
+      <button class="btn btn-secondary" id="btnCopy" onclick="copyResult()" style="display:none">Copy XML</button>
+      <span class="copied" id="copiedMsg">Copied!</span>
+    </div>
+  </div>
+
+</div>
+
+<script src="import-gen.js"></script>
+<script>
+/* ── State ── */
+let xmlReady = false;
+let columns = [];
+let resultXml = '';
+
+/* ── XML analysis ── */
+function analyzeXml() {
+  const text = document.getElementById('xmlInput').value.trim();
+  const status = document.getElementById('xmlAnalysis');
+  xmlReady = false;
+  resultXml = '';
+  if (!text) { status.innerHTML = '<div class="analysis-section"><span class="dim">Waiting for XML...</span></div>'; return; }
+
+  try {
+    const result = parseFormXml(text);
+    if (!result.hasImportSpec) {
+      status.innerHTML = '<div class="analysis-section"><span class="err">import-spec not found</span></div>';
+      return;
+    }
+    xmlReady = true;
+    const r = result;
+    status.innerHTML =
+      '<div class="analysis-section">' +
+        '<span class="label">Document</span>' +
+        '<span>' + escHtml(r.docLabel || '(no label)') + '</span>' +
+        '<span>ledger: ' + escHtml(r.sourceLedgerLabel || '(none)') + '</span>' +
+      '</div>' +
+      '<div class="analysis-section">' +
+        '<span class="label">Import spec</span>' +
+        '<span class="ok">import-spec: found</span>' +
+        '<span>enabled: ' + (r.importEnabledVal ? '<span class="ok">true</span>' : 'false') + '</span>' +
+        '<span>source-field-specs: ' + r.sourceFieldCount + '</span>' +
+        '<span>derived-field-specs: ' + r.derivedCount + '</span>' +
+      '</div>' +
+      (r.dimensions.length > 0 ?
+        '<div class="analysis-section">' +
+          '<span class="label">Dimensions (' + r.dimensions.length + ')</span>' +
+          '<span class="dim">' + r.dimensions.map(escHtml).join(', ') + '</span>' +
+        '</div>' : '') +
+      '<div class="analysis-section">' +
+        '<span class="label">Export spec</span>' +
+        '<span>enabled: ' + (r.exportEnabled ? 'true' : 'false') + '</span>' +
+      '</div>';
+    // Show Export button and load preview if existing specs found
+    document.getElementById('btnExport').style.display = r.sourceFieldCount > 0 ? '' : 'none';
+    if (r.sourceFieldCount > 0) {
+      columns = extractSourceFields(text);
+      renderPreview(columns);
+    }
+    // Update guide message based on derived status
+    updateGuideMessage(r.derivedCount);
+  } catch (e) {
+    status.innerHTML = '<div class="analysis-section"><span class="err">' + escHtml(e.message) + '</span></div>';
+  }
+}
+
+/* ── Guide message ── */
+function updateGuideMessage(derivedCount) {
+  const guide = document.getElementById('excelGuide');
+  // Remove previous notice if any
+  const old = guide.querySelector('.notice');
+  if (old) old.remove();
+  if (derivedCount > 0) {
+    const msg = document.createElement('span');
+    msg.className = 'notice';
+    msg.textContent = '* このフォームには既に算出フィールド定義があるため、データ取得元フィールドの変更のみとなります。';
+    // Insert before the is_value line
+    const isValueLine = guide.querySelectorAll('span:not(.guide-title)');
+    const lastLine = isValueLine[isValueLine.length - 1];
+    guide.insertBefore(msg, lastLine);
+  }
+}
+
+/* ── Template download ── */
+function downloadTemplate(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const header = ['column_id', 'field_label', 'field_name', 'is_value', 'field_key'];
+  const sample = ['A', 'YYYYMM', 'YYYYMM', '', ''];
+  const ws = XLSX.utils.aoa_to_sheet([header, sample]);
+  ws['!cols'] = [{ wch: 10 }, { wch: 14 }, { wch: 20 }, { wch: 10 }, { wch: 14 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'ColumnDef');
+  const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'column-def-template.xlsx';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ── Export existing specs to Excel ── */
+function exportExcel() {
+  const text = document.getElementById('xmlInput').value;
+  const cols = extractSourceFields(text);
+  if (!cols.length) { alert('No source-field-specs to export.'); return; }
+
+  const buf = exportColumnDefExcel(cols);
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'column-def.xlsx';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/* ── Excel file handling ── */
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) loadExcel(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => { if (e.target.files.length) loadExcel(e.target.files[0]); });
+
+function loadExcel(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      columns = parseColumnDef(ev.target.result);
+      renderPreview(columns);
+    } catch (e) {
+      alert(e.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderPreview(cols) {
+  const body = document.getElementById('previewBody');
+  body.innerHTML = cols.map((c, i) =>
+    '<tr>' +
+    '<td>' + (i + 1) + '</td>' +
+    '<td>' + escHtml(c.columnId) + '</td>' +
+    '<td>' + escHtml(c.label) + '</td>' +
+    '<td>' + escHtml(c.name || '') + '</td>' +
+    '<td>' + (c.isValue ? 'TRUE' : '') + '</td>' +
+    '<td>' + escHtml(c.fieldKey || '') + '</td>' +
+    '</tr>'
+  ).join('');
+  document.getElementById('previewEmpty').style.display = 'none';
+  document.getElementById('previewTable').style.display = '';
+  document.getElementById('resultBar').style.display = '';
+  document.getElementById('resultCount').textContent = cols.length + ' columns loaded';
+  document.getElementById('btnCopy').style.display = 'none';
+}
+
+/* ── Generate ── */
+function generate() {
+  if (!xmlReady) { alert('Please analyze XML first.'); return; }
+  if (!columns.length) { alert('No columns loaded.'); return; }
+
+  try {
+    const xmlText = document.getElementById('xmlInput').value;
+    const result = generateImportSpecs(xmlText, columns);
+    resultXml = result.resultXml;
+    document.getElementById('resultCount').textContent = 'source-field-specs: ' + result.count;
+    document.getElementById('btnCopy').style.display = '';
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+/* ── Copy result ── */
+function copyResult() {
+  if (!resultXml) return;
+  navigator.clipboard.writeText(resultXml).then(() => {
+    const msg = document.getElementById('copiedMsg');
+    msg.classList.add('show');
+    setTimeout(() => msg.classList.remove('show'), 1500);
+  });
+}
+
+/* ── Clear ── */
+function clearAll() {
+  document.getElementById('xmlInput').value = '';
+  document.getElementById('xmlAnalysis').innerHTML = '<div class="analysis-section"><span class="dim">Waiting for XML...</span></div>';
+  document.getElementById('previewBody').innerHTML = '';
+  document.getElementById('previewEmpty').style.display = '';
+  document.getElementById('previewTable').style.display = 'none';
+  document.getElementById('resultBar').style.display = 'none';
+  fileInput.value = '';
+  xmlReady = false;
+  resultXml = '';
+  columns = [];
+  document.getElementById('btnExport').style.display = 'none';
+}
+
+/* ── Util ── */
+function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+</script>
+</body>
+</html>

@@ -54,6 +54,22 @@ function parseAPD(xml) {
     return parser.parseFromString(text, 'application/xml');
   }
 
+  /** Extract form name from rawSpec XML (prefers ja, falls back to en) */
+  function extractFormName(rawSpec) {
+    if (!rawSpec) return '';
+    const specDoc = parser.parseFromString(rawSpec, 'application/xml');
+    if (specDoc.querySelector('parsererror')) return '';
+    const nameEl = specDoc.querySelector('name');
+    if (!nameEl) return '';
+    const text = nameEl.textContent || '';
+    // Format: en;"English name";ja;"Japanese name"
+    const jaMatch = text.match(/ja;"([^"]*)"/);
+    if (jaMatch) return jaMatch[1];
+    const enMatch = text.match(/en;"([^"]*)"/);
+    if (enMatch) return enMatch[1];
+    return text.trim();
+  }
+
   // ── SCHEMA_VERSION ───────────────────────────────────────────────────
   const schemaVerEntry = childEntries(appEntry, 'SCHEMA_VERSION')[0];
   if (schemaVerEntry) result.schemaVersion = contentText(schemaVerEntry).trim();
@@ -75,7 +91,8 @@ function parseAPD(xml) {
           const specEntry = childEntries(f, 'DOCUMENT_SPEC')[0]
                          || childEntries(f, 'SIMPLE_DOCUMENT_SPEC')[0];
           const rawSpec = specEntry ? contentText(specEntry) : '';
-          result.forms.push({ label, rawSpec });
+          const name = extractFormName(rawSpec);
+          result.forms.push({ label, name, rawSpec });
         }
       }
     }
